@@ -7,7 +7,7 @@ from sqlalchemy import text
 import socketio
 
 from app.config import settings
-from app import database, schemas
+from app.models import database, schemas
 from app.lib.redis import redis_client, pub_client, sub_client
 from app.realtime import sio, sio_app
 from app.routes import auth, me, servers, chats, settings as settings_routes

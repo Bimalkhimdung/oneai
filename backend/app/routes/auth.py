@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Response, Cookie, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from app import schemas, database
+from app.models import schemas, database
 from app.services import auth as auth_service
 from app.config import settings
 

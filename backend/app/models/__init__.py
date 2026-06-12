@@ -1,5 +1,6 @@
 import uuid
 import datetime
+import enum
 from sqlalchemy import (
     Column,
     String,
@@ -15,8 +16,7 @@ from sqlalchemy import (
     Index,
 )
 from sqlalchemy.orm import relationship
-from app.database import Base
-import enum
+from .database import Base
 
 def generate_cuid():
     return "c" + uuid.uuid4().hex[:24]
@@ -272,3 +272,7 @@ class UserSettings(Base):
     preferences = Column(JSON, nullable=True)
 
     user = relationship("User", back_populates="settings")
+
+# Expose database and schemas inside models folder package
+from . import database
+from . import schemas

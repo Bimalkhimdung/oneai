@@ -3,7 +3,8 @@ import secrets
 import bcrypt
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from app import crud, models, schemas
+from app import crud, models
+from app.models import schemas
 from app.config import settings
 from app.lib.jwt import sign_access_token
 from app.lib.crypto import sha256
@@ -107,4 +108,32 @@ async def me(db: AsyncSession, user_id: str) -> schemas.UserDto:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found."
         )
+    return to_user_dto(user)
+
+async def update_profile(db: AsyncSession, user_id: str, input_data: schemas.UpdateProfileInput) -> schemas.UserDto:
+    user = await crud.get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found."
+        )
+    
+    if input_data.fullName:
+        user.full_name = input_data.fullName
+        
+    if input_data.newPassword:
+        if not input_data.oldPassword:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current password is required to set a new password."
+            )
+        if not verify_password(input_data.oldPassword, user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Incorrect current password."
+            )
+        user.password_hash = hash_password(input_data.newPassword)
+        
+    await db.commit()
+    await db.refresh(user)
     return to_user_dto(user)

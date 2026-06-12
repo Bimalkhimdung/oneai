@@ -2,7 +2,8 @@ import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
-from app import crud, models, schemas
+from app import crud, models
+from app.models import schemas
 from app.providers.registry import get_adapter
 from app.providers.base import ProviderConnectInfo
 from app.lib.crypto import seal, open_secret

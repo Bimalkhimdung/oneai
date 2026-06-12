@@ -5,7 +5,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
-from app import crud, models, schemas
+from app import crud, models
+from app.models import schemas
 from app.providers.registry import get_adapter
 from app.providers.base import ProviderConnectInfo
 from app.services.server import decrypt_api_key
@@ -168,7 +169,7 @@ async def run_stream(
 ):
     # import sio and session maker locally to avoid circular dependency
     from app.realtime import sio
-    from app.database import AsyncSessionLocal
+    from app.models.database import AsyncSessionLocal
     
     room = f"user:{user_id}"
     adapter = get_adapter(server.provider.value)

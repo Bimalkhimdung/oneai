@@ -8,6 +8,11 @@ class RegisterInput(BaseModel):
     password: str = Field(..., min_length=8, max_length=128)
     fullName: str = Field(..., min_length=1, max_length=120)
 
+class UpdateProfileInput(BaseModel):
+    fullName: Optional[str] = Field(None, min_length=1, max_length=120)
+    oldPassword: Optional[str] = Field(None, min_length=1, max_length=128)
+    newPassword: Optional[str] = Field(None, min_length=8, max_length=128)
+
 class LoginInput(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=1, max_length=128)

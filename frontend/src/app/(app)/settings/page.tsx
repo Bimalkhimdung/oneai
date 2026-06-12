@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { Download, Terminal, CheckCircle2, AlertCircle, RefreshCw, Cpu } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Download, Terminal, CheckCircle2, AlertCircle, RefreshCw, Cpu, Search, Database } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ProviderInstallInfo {
@@ -17,6 +18,12 @@ interface ProviderInstallInfo {
 
 interface InstallationsResponse {
   [key: string]: ProviderInstallInfo;
+}
+
+interface OllamaModel {
+  id: string;
+  name: string;
+  description: string;
 }
 
 function Badge({ children, className, variant = "default", ...props }: React.HTMLAttributes<HTMLDivElement> & { variant?: "default" | "secondary" | "destructive" | "outline" }) {
@@ -69,7 +76,14 @@ export default function SettingsPage() {
   const user = useAuthStore((s) => s.user);
   const [installations, setInstallations] = useState<InstallationsResponse | null>(null);
   const [activeLogsProvider, setActiveLogsProvider] = useState<string | null>(null);
+  const [selectedEngine, setSelectedEngine] = useState<string | null>(null);
+  const [hasSetDefault, setHasSetDefault] = useState(false);
   const logsEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Model Browser State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [models, setModels] = useState<OllamaModel[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   // Poll installations status while any is installing
   useEffect(() => {
@@ -79,6 +93,17 @@ export default function SettingsPage() {
       try {
         const data = await api<InstallationsResponse>('/settings/installations');
         setInstallations(data);
+
+        // Auto-select the installed engine if we haven't checked yet
+        if (!selectedEngine && !hasSetDefault) {
+          const installedProvider = PROVIDERS.find(
+            (p) => data[p.id]?.status === 'installed' || data[p.id]?.status === 'completed'
+          );
+          if (installedProvider) {
+            setSelectedEngine(installedProvider.id);
+            setHasSetDefault(true);
+          }
+        }
       } catch (err) {
         console.error('Failed to fetch installation statuses', err);
       }
@@ -88,7 +113,7 @@ export default function SettingsPage() {
     interval = setInterval(fetchStatuses, 2000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedEngine, hasSetDefault]);
 
   // Auto-scroll logs to bottom
   useEffect(() => {
@@ -96,6 +121,24 @@ export default function SettingsPage() {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [installations, activeLogsProvider]);
+
+  // Fetch Ollama models based on search
+  useEffect(() => {
+    if (selectedEngine === 'OLLAMA') {
+      const delay = setTimeout(async () => {
+        setIsSearching(true);
+        try {
+          const res = await api<{models: OllamaModel[]}>(`/settings/ollama/search?q=${encodeURIComponent(searchQuery)}`);
+          setModels(res.models || []);
+        } catch (err) {
+          console.error('Failed to fetch models', err);
+        } finally {
+          setIsSearching(false);
+        }
+      }, 500);
+      return () => clearTimeout(delay);
+    }
+  }, [searchQuery, selectedEngine]);
 
   async function handleInstall(providerId: string) {
     try {
@@ -107,6 +150,20 @@ export default function SettingsPage() {
       setActiveLogsProvider(providerId);
     } catch (err: any) {
       toast.error(err?.message || `Failed to trigger installation for ${providerId}`);
+    }
+  }
+
+  async function handlePullModel(modelId: string) {
+    try {
+      const providerKey = `OLLAMA_MODEL_${modelId}`;
+      toast.info(`Queuing pull for model ${modelId}...`);
+      await api('/settings/ollama/pull', {
+        method: 'POST',
+        body: JSON.stringify({ model_name: modelId }),
+      });
+      setActiveLogsProvider(providerKey);
+    } catch (err: any) {
+      toast.error(err?.message || `Failed to pull model ${modelId}`);
     }
   }
 
@@ -126,36 +183,6 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-8 max-w-5xl">
-      <div>
-        <h1 className="text-2xl font-semibold">Settings</h1>
-        <p className="text-sm text-muted-foreground">
-          Configure your workspace, profiles, and local model providers.
-        </p>
-      </div>
-
-      {/* User profile card */}
-      <Card className="border-muted/40 shadow-sm">
-        <CardHeader>
-          <CardTitle>Workspace Profile</CardTitle>
-          <CardDescription>Personal details and workspace role settings.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1">
-            <span className="text-xs font-semibold text-muted-foreground uppercase">Full Name</span>
-            <p className="text-sm font-medium">{user?.fullName || '—'}</p>
-          </div>
-          <div className="space-y-1">
-            <span className="text-xs font-semibold text-muted-foreground uppercase">Email Address</span>
-            <p className="text-sm font-medium">{user?.email || '—'}</p>
-          </div>
-          <div className="space-y-1">
-            <span className="text-xs font-semibold text-muted-foreground uppercase">Workspace Role</span>
-            <p className="text-sm font-medium">
-              <Badge variant="secondary" className="capitalize">{user?.role?.toLowerCase() || 'Member'}</Badge>
-            </p>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Local AI installer cards */}
       <div className="space-y-4">
@@ -167,13 +194,35 @@ export default function SettingsPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-3">
-          {PROVIDERS.map((provider) => {
+          {PROVIDERS.filter((p) => (selectedEngine ? p.id === selectedEngine : true)).map((provider) => {
             const Icon = provider.icon;
             const info = installations?.[provider.id] || { status: 'idle', logs: [], progress: 0 };
             const isInstalling = info.status === 'installing';
 
             return (
-              <Card key={provider.id} className="flex flex-col justify-between border-muted/40 shadow-sm relative overflow-hidden">
+              <div key={provider.id} className="col-span-1 flex flex-col">
+                {selectedEngine === provider.id && (
+                  <div className="flex justify-between items-center px-1 mb-3 animate-in fade-in duration-300">
+                    <span className="text-xs text-muted-foreground font-medium">Selected Engine</span>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="text-xs h-7 px-3 flex items-center gap-1.5 shadow-sm"
+                      onClick={() => setSelectedEngine(null)}
+                    >
+                      Change engine →
+                    </Button>
+                  </div>
+                )}
+                
+                <Card 
+                  className={cn(
+                    "flex flex-col justify-between border-muted/40 shadow-sm relative overflow-hidden h-full cursor-pointer transition-all hover:border-primary/30",
+                    selectedEngine === provider.id ? "border-primary/50 shadow-md ring-1 ring-primary/20" : ""
+                  )}
+                  onClick={() => !selectedEngine && setSelectedEngine(provider.id)}
+                >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="p-2 bg-primary/10 text-primary rounded-lg">
@@ -218,10 +267,88 @@ export default function SettingsPage() {
                   </div>
                 </CardContent>
               </Card>
+            </div>
             );
           })}
         </div>
       </div>
+
+      {/* Ollama Model Browser */}
+      {selectedEngine === 'OLLAMA' && (
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex items-center justify-between border-b border-border/40 pb-4">
+            <div>
+              <h2 className="text-lg font-medium flex items-center gap-2">
+                <Database className="h-5 w-5 text-emerald-500" />
+                Ollama Library
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Search and download LLMs like DeepSeek, Qwen, or Llama.
+              </p>
+            </div>
+            <div className="relative w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Search models..." 
+                className="pl-9 h-9 bg-card/50" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {isSearching && models.length === 0 ? (
+            <div className="flex justify-center p-8 text-muted-foreground animate-pulse">
+              <RefreshCw className="h-5 w-5 animate-spin mr-2" />
+              Searching library...
+            </div>
+          ) : models.length > 0 ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              {models.map((m) => {
+                const providerKey = `OLLAMA_MODEL_${m.id}`;
+                const info = installations?.[providerKey] || { status: 'idle', logs: [], progress: 0 };
+                const isPulling = info.status === 'installing';
+                const isPulled = info.status === 'completed';
+
+                return (
+                  <div key={m.id} className="flex flex-col gap-2 p-4 rounded-xl border border-border/50 bg-card/30 hover:bg-card/50 transition-colors">
+                    <div className="flex justify-between items-start">
+                      <div className="min-w-0 pr-4">
+                        <h4 className="font-semibold text-sm truncate">{m.name}</h4>
+                        <p className="text-[11px] text-muted-foreground line-clamp-2 mt-1">{m.description}</p>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        variant={isPulled ? "outline" : "default"}
+                        className="h-7 text-xs shrink-0"
+                        onClick={() => handlePullModel(m.id)}
+                        disabled={isPulling || isPulled}
+                      >
+                        {isPulling ? <RefreshCw className="h-3 w-3 animate-spin mr-1" /> : <Download className="h-3 w-3 mr-1" />}
+                        {isPulled ? 'Pulled' : isPulling ? 'Pulling...' : 'Pull'}
+                      </Button>
+                    </div>
+                    {isPulling && <Progress value={info.progress} className="h-1 mt-1" />}
+                    {info.logs.length > 0 && (
+                      <button 
+                        className="text-[10px] text-left text-muted-foreground hover:text-foreground mt-1 underline underline-offset-2"
+                        onClick={() => setActiveLogsProvider(activeLogsProvider === providerKey ? null : providerKey)}
+                      >
+                        {activeLogsProvider === providerKey ? 'Hide logs' : 'View logs'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center p-10 text-muted-foreground bg-card/10 rounded-xl border border-dashed border-border/40">
+              <Database className="h-8 w-8 mb-3 opacity-20" />
+              <p className="text-sm">No models found for "{searchQuery}"</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Live installer log output terminal console */}
       {activeLogsProvider && installations?.[activeLogsProvider] && (
