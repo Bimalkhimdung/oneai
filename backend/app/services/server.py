@@ -34,11 +34,20 @@ async def test_connection(input_data: schemas.TestServerInput) -> dict:
         apiKey=input_data.apiKey
     )
     result = await adapter.ping(conn_info)
+    models = []
+    if result.ok:
+        try:
+            models_info = await adapter.list_models(conn_info)
+            models = [m.__dict__ for m in models_info]
+        except Exception:
+            pass
+            
     return {
         "ok": result.ok,
         "version": result.version,
         "error": result.error,
-        "latencyMs": result.latencyMs
+        "latencyMs": result.latencyMs,
+        "models": models
     }
 
 async def create(db: AsyncSession, user_id: str, input_data: schemas.CreateServerInput) -> schemas.ServerDto:

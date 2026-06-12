@@ -64,7 +64,7 @@ class User(Base):
     email = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
     full_name = Column(String, nullable=False)
-    role = Column(SQLEnum(Role), default=Role.USER, nullable=False)
+    role = Column(SQLEnum(Role, native_enum=False), default=Role.USER, nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
 
@@ -98,11 +98,11 @@ class Server(Base):
     name = Column(String, nullable=False)
     host = Column(String, nullable=False)
     port = Column(Integer, nullable=False)
-    provider = Column(SQLEnum(Provider), nullable=False)
+    provider = Column(SQLEnum(Provider, native_enum=False), nullable=False)
     api_key_cipher = Column(String, nullable=True)
     api_key_iv = Column(String, nullable=True)
     api_key_tag = Column(String, nullable=True)
-    status = Column(SQLEnum(ServerStatus), default=ServerStatus.UNKNOWN, nullable=False)
+    status = Column(SQLEnum(ServerStatus, native_enum=False), default=ServerStatus.UNKNOWN, nullable=False)
     version = Column(String, nullable=True)
     last_seen_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
@@ -145,7 +145,7 @@ class Installation(Base):
     id = Column(String, primary_key=True, default=generate_cuid)
     server_id = Column(String, ForeignKey("servers.id", ondelete="CASCADE"), nullable=False)
     model_name = Column(String, nullable=False)
-    status = Column(SQLEnum(InstallStatus), nullable=False)
+    status = Column(SQLEnum(InstallStatus, native_enum=False), nullable=False)
     progress = Column(Float, default=0.0, nullable=False)
     total_bytes = Column(BigInteger, nullable=True)
     pulled_bytes = Column(BigInteger, nullable=True)
@@ -184,8 +184,8 @@ class Message(Base):
     __tablename__ = "messages"
 
     id = Column(String, primary_key=True, default=generate_cuid)
-    chat_id = Column(String, ForeignKey("chats.id", ondelete="CASCADE"), nullable=False)
-    role = Column(SQLEnum(MessageRole), nullable=False)
+    chat_id = Column(String, ForeignKey("chats.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(SQLEnum(MessageRole, native_enum=False), nullable=False)
     content = Column(String, nullable=False)
     model_name = Column(String, nullable=True)
     tokens_in = Column(Integer, nullable=True)
@@ -215,7 +215,7 @@ class WorkspaceMember(Base):
 
     workspace_id = Column(String, ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True)
     user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
-    role = Column(SQLEnum(WorkspaceRole), default=WorkspaceRole.MEMBER, nullable=False)
+    role = Column(SQLEnum(WorkspaceRole, native_enum=False), default=WorkspaceRole.MEMBER, nullable=False)
     joined_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
 
     workspace = relationship("Workspace", back_populates="members")

@@ -217,11 +217,30 @@ def get_statuses() -> dict:
             except Exception:
                 pass  # Never crash the status endpoint
 
+    # Auto-detect local ollama models if Ollama is installed
+    if INSTALL_STATUS["OLLAMA"]["status"] == "installed":
+        import urllib.request
+        import json
+        try:
+            req = urllib.request.Request("http://127.0.0.1:11434/api/tags")
+            with urllib.request.urlopen(req, timeout=1) as response:
+                data = json.loads(response.read().decode('utf-8'))
+                for model in data.get("models", []):
+                    # Ollama model names can contain tags like deepseek-coder:6.7b
+                    # The library id often doesn't have the tag or has different format, but we'll use the name
+                    # We will strip :latest to match standard names
+                    m_name = model["name"].replace(":latest", "")
+                    pkey = f"OLLAMA_MODEL_{m_name}"
+                    if pkey not in INSTALL_STATUS or INSTALL_STATUS[pkey]["status"] == "idle":
+                        INSTALL_STATUS[pkey] = {"status": "installed", "logs": [], "progress": 100}
+        except Exception:
+            pass
+
     return INSTALL_STATUS
 
-def trigger_model_pull(model_name: str) -> dict:
+def trigger_model_pull(model_name: str, tracking_id: str = None) -> dict:
     """Pulls a model using ollama pull and streams the output."""
-    provider_key = f"OLLAMA_MODEL_{model_name}"
+    provider_key = f"OLLAMA_MODEL_{tracking_id or model_name}"
     
     if provider_key not in INSTALL_STATUS:
         INSTALL_STATUS[provider_key] = {"status": "idle", "logs": [], "progress": 0}
@@ -241,3 +260,24 @@ def trigger_model_pull(model_name: str) -> dict:
         
     asyncio.create_task(run_command_stream_logs(provider_key, cmd))
     return {"ok": True, "status": "installing"}
+
+def delete_model(model_name: str) -> dict:
+    """Deletes a model using ollama rm."""
+    provider_key = f"OLLAMA_MODEL_{model_name}"
+    
+    os_name = _get_os()
+    if os_name == "windows":
+        ollama_exe = os.path.expandvars(r"%LOCALAPPDATA%\Programs\Ollama\ollama.exe")
+        if not os.path.exists(ollama_exe):
+            ollama_exe = "ollama"
+        cmd = ["powershell", "-NoProfile", "-Command", f"& '{ollama_exe}' rm {model_name}"]
+    else:
+        cmd = ["ollama", "rm", model_name]
+        
+    try:
+        subprocess.run(cmd, check=True, capture_output=True)
+        # Update state locally so get_statuses reflects it immediately
+        INSTALL_STATUS[provider_key] = {"status": "idle", "logs": [], "progress": 0}
+        return {"ok": True}
+    except subprocess.CalledProcessError as e:
+        return {"ok": False, "message": e.stderr.decode() if e.stderr else "Failed to delete model"}

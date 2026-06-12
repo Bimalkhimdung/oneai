@@ -1,14 +1,15 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuthStore } from '@/stores/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
-import { Download, Terminal, CheckCircle2, AlertCircle, RefreshCw, Cpu, Search, Database } from 'lucide-react';
+import { Download, Terminal, CheckCircle2, AlertCircle, RefreshCw, Cpu, Database } from 'lucide-react';
 import { toast } from 'sonner';
+import Link from 'next/link';
 
 interface ProviderInstallInfo {
   status: 'idle' | 'installing' | 'completed' | 'installed' | 'failed';
@@ -20,10 +21,8 @@ interface InstallationsResponse {
   [key: string]: ProviderInstallInfo;
 }
 
-interface OllamaModel {
-  id: string;
-  name: string;
-  description: string;
+interface InstallationsResponse {
+  [key: string]: ProviderInstallInfo;
 }
 
 function Badge({ children, className, variant = "default", ...props }: React.HTMLAttributes<HTMLDivElement> & { variant?: "default" | "secondary" | "destructive" | "outline" }) {
@@ -40,35 +39,26 @@ function Badge({ children, className, variant = "default", ...props }: React.HTM
   );
 }
 
-function Progress({ value, className }: { value: number; className?: string }) {
-  return (
-    <div className={cn("relative h-2 w-full overflow-hidden rounded-full bg-secondary", className)}>
-      <div
-        className="h-full bg-primary transition-all duration-300"
-        style={{ width: `${value || 0}%` }}
-      />
-    </div>
-  );
-}
+import { Progress } from '@/components/ui/progress';
 
 const PROVIDERS = [
   {
     id: 'OLLAMA',
     name: 'Ollama',
     description: 'Run language models locally with a simple, high-performance API. Highly recommended for Mac users.',
-    icon: Download,
+    logo: '/logo/onboarding/ollama.webp',
   },
   {
     id: 'LLAMA_CPP',
     name: 'Llama.cpp',
     description: 'LLM inference in C/C++ with Metal acceleration. Supports raw GGUF files directly.',
-    icon: Cpu,
+    logo: '/logo/onboarding/llamacpp.svg',
   },
   {
     id: 'VLLM',
     name: 'vLLM',
     description: 'A high-throughput and memory-efficient LLM serving engine. Best suited for high-end server configurations.',
-    icon: Terminal,
+    logo: '/logo/onboarding/vllm.svg',
   },
 ];
 
@@ -80,15 +70,8 @@ export default function SettingsPage() {
   const [hasSetDefault, setHasSetDefault] = useState(false);
   const logsEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Model Browser State
-  const [searchQuery, setSearchQuery] = useState('');
-  const [models, setModels] = useState<OllamaModel[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-
-  // Poll installations status while any is installing
+  // Initial fetch and auto-selection
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-
     async function fetchStatuses() {
       try {
         const data = await api<InstallationsResponse>('/settings/installations');
@@ -108,12 +91,32 @@ export default function SettingsPage() {
         console.error('Failed to fetch installation statuses', err);
       }
     }
-
     fetchStatuses();
-    interval = setInterval(fetchStatuses, 2000);
-
-    return () => clearInterval(interval);
   }, [selectedEngine, hasSetDefault]);
+
+  // Derived state to check if any provider is actively installing
+  const isAnyInstalling = useMemo(() => {
+    if (!installations) return false;
+    return Object.values(installations).some(info => info.status === 'installing');
+  }, [installations]);
+
+  // Poll installations only when an installation is actively running
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    if (isAnyInstalling) {
+      interval = setInterval(async () => {
+        try {
+          const data = await api<InstallationsResponse>('/settings/installations');
+          setInstallations(data);
+        } catch (err) { }
+      }, 2000);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isAnyInstalling]);
 
   // Auto-scroll logs to bottom
   useEffect(() => {
@@ -121,24 +124,6 @@ export default function SettingsPage() {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [installations, activeLogsProvider]);
-
-  // Fetch Ollama models based on search
-  useEffect(() => {
-    if (selectedEngine === 'OLLAMA') {
-      const delay = setTimeout(async () => {
-        setIsSearching(true);
-        try {
-          const res = await api<{models: OllamaModel[]}>(`/settings/ollama/search?q=${encodeURIComponent(searchQuery)}`);
-          setModels(res.models || []);
-        } catch (err) {
-          console.error('Failed to fetch models', err);
-        } finally {
-          setIsSearching(false);
-        }
-      }, 500);
-      return () => clearTimeout(delay);
-    }
-  }, [searchQuery, selectedEngine]);
 
   async function handleInstall(providerId: string) {
     try {
@@ -148,22 +133,14 @@ export default function SettingsPage() {
         body: JSON.stringify({ provider: providerId }),
       });
       setActiveLogsProvider(providerId);
+
+      // Locally trigger installing state so polling begins
+      setInstallations(prev => ({
+        ...prev,
+        [providerId]: { status: 'installing', logs: [], progress: 0 }
+      }));
     } catch (err: any) {
       toast.error(err?.message || `Failed to trigger installation for ${providerId}`);
-    }
-  }
-
-  async function handlePullModel(modelId: string) {
-    try {
-      const providerKey = `OLLAMA_MODEL_${modelId}`;
-      toast.info(`Queuing pull for model ${modelId}...`);
-      await api('/settings/ollama/pull', {
-        method: 'POST',
-        body: JSON.stringify({ model_name: modelId }),
-      });
-      setActiveLogsProvider(providerKey);
-    } catch (err: any) {
-      toast.error(err?.message || `Failed to pull model ${modelId}`);
     }
   }
 
@@ -195,7 +172,6 @@ export default function SettingsPage() {
 
         <div className="grid gap-6 md:grid-cols-3">
           {PROVIDERS.filter((p) => (selectedEngine ? p.id === selectedEngine : true)).map((provider) => {
-            const Icon = provider.icon;
             const info = installations?.[provider.id] || { status: 'idle', logs: [], progress: 0 };
             const isInstalling = info.status === 'installing';
 
@@ -215,140 +191,75 @@ export default function SettingsPage() {
                     </Button>
                   </div>
                 )}
-                
-                <Card 
+
+                <Card
                   className={cn(
-                    "flex flex-col justify-between border-muted/40 shadow-sm relative overflow-hidden h-full cursor-pointer transition-all hover:border-primary/30",
+                    "flex flex-col justify-between border-muted/40 shadow-sm relative overflow-hidden h-full cursor-pointer transition-all hover:border-primary/30 rounded-[1px]",
                     selectedEngine === provider.id ? "border-primary/50 shadow-md ring-1 ring-primary/20" : ""
                   )}
                   onClick={() => !selectedEngine && setSelectedEngine(provider.id)}
                 >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="p-2 bg-primary/10 text-primary rounded-lg">
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    {getStatusBadge(info.status)}
-                  </div>
-                  <CardTitle className="pt-2 text-base font-semibold">{provider.name}</CardTitle>
-                  <CardDescription className="text-xs leading-normal min-h-[50px]">{provider.description}</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-0 space-y-4">
-                  {isInstalling && (
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[11px] text-muted-foreground">
-                        <span>Installing...</span>
-                        <span>{info.progress}%</span>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div className="p-1.5 bg-card/60 border border-border/40 rounded-lg">
+                        <img src={provider.logo} alt={provider.name} className="h-6 w-6 object-contain" />
                       </div>
-                      <Progress value={info.progress} className="h-1.5" />
+                      {getStatusBadge(info.status)}
                     </div>
-                  )}
-
-                  <div className="flex gap-2">
-                    <Button
-                      className="w-full text-xs h-8"
-                      variant={info.status === 'installed' || info.status === 'completed' ? 'outline' : 'default'}
-                      onClick={() => handleInstall(provider.id)}
-                      disabled={isInstalling}
-                    >
-                      {info.status === 'installed' || info.status === 'completed' ? 'Reinstall' : 'Install locally'}
-                    </Button>
-
-                    {info.logs.length > 0 && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 text-[11px] px-2 text-muted-foreground hover:text-foreground"
-                        onClick={() => setActiveLogsProvider(activeLogsProvider === provider.id ? null : provider.id)}
-                      >
-                        {activeLogsProvider === provider.id ? 'Hide logs' : 'View logs'}
-                      </Button>
+                    <CardTitle className="pt-2 text-base font-semibold">{provider.name}</CardTitle>
+                    <CardDescription className="text-xs leading-normal min-h-[50px]">{provider.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-0 space-y-4">
+                    {isInstalling && (
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[11px] text-muted-foreground">
+                          <span>Installing...</span>
+                          <span>{info.progress}%</span>
+                        </div>
+                        <Progress value={info.progress} className="h-1.5" />
+                      </div>
                     )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+
+                    <div className="flex gap-2">
+                      <Button
+                        className="w-full text-xs h-8"
+                        variant={info.status === 'installed' || info.status === 'completed' ? 'outline' : 'default'}
+                        onClick={() => handleInstall(provider.id)}
+                        disabled={isInstalling}
+                      >
+                        {info.status === 'installed' || info.status === 'completed' ? 'Reinstall' : 'Install locally'}
+                      </Button>
+
+                      {selectedEngine === 'OLLAMA' && provider.id === 'OLLAMA' && (
+                        <Link href="/settings/ollama/models" className="w-full">
+                          <Button
+                            variant="secondary"
+                            className="w-full text-xs h-8 flex gap-1.5"
+                          >
+                            <Database className="h-3 w-3" />
+                            Browse Models
+                          </Button>
+                        </Link>
+                      )}
+
+                      {info.logs.length > 0 && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+                          onClick={() => setActiveLogsProvider(activeLogsProvider === provider.id ? null : provider.id)}
+                        >
+                          {activeLogsProvider === provider.id ? 'Hide logs' : 'View logs'}
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             );
           })}
         </div>
       </div>
-
-      {/* Ollama Model Browser */}
-      {selectedEngine === 'OLLAMA' && (
-        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="flex items-center justify-between border-b border-border/40 pb-4">
-            <div>
-              <h2 className="text-lg font-medium flex items-center gap-2">
-                <Database className="h-5 w-5 text-emerald-500" />
-                Ollama Library
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Search and download LLMs like DeepSeek, Qwen, or Llama.
-              </p>
-            </div>
-            <div className="relative w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search models..." 
-                className="pl-9 h-9 bg-card/50" 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {isSearching && models.length === 0 ? (
-            <div className="flex justify-center p-8 text-muted-foreground animate-pulse">
-              <RefreshCw className="h-5 w-5 animate-spin mr-2" />
-              Searching library...
-            </div>
-          ) : models.length > 0 ? (
-            <div className="grid gap-3 md:grid-cols-2">
-              {models.map((m) => {
-                const providerKey = `OLLAMA_MODEL_${m.id}`;
-                const info = installations?.[providerKey] || { status: 'idle', logs: [], progress: 0 };
-                const isPulling = info.status === 'installing';
-                const isPulled = info.status === 'completed';
-
-                return (
-                  <div key={m.id} className="flex flex-col gap-2 p-4 rounded-xl border border-border/50 bg-card/30 hover:bg-card/50 transition-colors">
-                    <div className="flex justify-between items-start">
-                      <div className="min-w-0 pr-4">
-                        <h4 className="font-semibold text-sm truncate">{m.name}</h4>
-                        <p className="text-[11px] text-muted-foreground line-clamp-2 mt-1">{m.description}</p>
-                      </div>
-                      <Button 
-                        size="sm" 
-                        variant={isPulled ? "outline" : "default"}
-                        className="h-7 text-xs shrink-0"
-                        onClick={() => handlePullModel(m.id)}
-                        disabled={isPulling || isPulled}
-                      >
-                        {isPulling ? <RefreshCw className="h-3 w-3 animate-spin mr-1" /> : <Download className="h-3 w-3 mr-1" />}
-                        {isPulled ? 'Pulled' : isPulling ? 'Pulling...' : 'Pull'}
-                      </Button>
-                    </div>
-                    {isPulling && <Progress value={info.progress} className="h-1 mt-1" />}
-                    {info.logs.length > 0 && (
-                      <button 
-                        className="text-[10px] text-left text-muted-foreground hover:text-foreground mt-1 underline underline-offset-2"
-                        onClick={() => setActiveLogsProvider(activeLogsProvider === providerKey ? null : providerKey)}
-                      >
-                        {activeLogsProvider === providerKey ? 'Hide logs' : 'View logs'}
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center p-10 text-muted-foreground bg-card/10 rounded-xl border border-dashed border-border/40">
-              <Database className="h-8 w-8 mb-3 opacity-20" />
-              <p className="text-sm">No models found for "{searchQuery}"</p>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Live installer log output terminal console */}
       {activeLogsProvider && installations?.[activeLogsProvider] && (
