@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+pydantic[email]
+pydantic-settings
+sqlalchemy
+asyncpg
+python-socketio
+pyjwt
+bcrypt
+httpx
+redis
+cryptography
+psutil
+python-multipart
+python-dotenv
