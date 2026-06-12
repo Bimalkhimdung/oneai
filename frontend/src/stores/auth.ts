@@ -19,7 +19,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   hydrated: false,
   setSession: (user, accessToken) => {
     setAccessToken(accessToken);
-    set({ user, accessToken });
+    set({ user, accessToken, hydrated: true });
   },
   clear: () => {
     setAccessToken(null);

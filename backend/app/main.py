@@ -10,7 +10,7 @@ from app.config import settings
 from app import database, schemas
 from app.lib.redis import redis_client, pub_client, sub_client
 from app.realtime import sio, sio_app
-from app.routes import auth, me, servers, chats
+from app.routes import auth, me, servers, chats, settings as settings_routes
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("app.main")
@@ -63,6 +63,7 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(me.router, prefix="/api/v1")
 app.include_router(servers.router, prefix="/api/v1")
 app.include_router(chats.router, prefix="/api/v1")
+app.include_router(settings_routes.router, prefix="/api/v1")
 
 # Combine FastAPI and Socket.IO into a single ASGI app
 # Socket.IO intercepts /socket.io requests, other requests go to FastAPI

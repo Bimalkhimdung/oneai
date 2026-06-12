@@ -5,58 +5,58 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 240 10% 3.9%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 240 10% 3.9%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
 
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 0 0% 2%;          /* Pitch black #050505 */
+    --foreground: 0 0% 98%;          /* Crisp white #fafafa */
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 0 0% 4.5%;               /* Premium dark grey #0c0c0c */
+    --card-foreground: 0 0% 98%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 0 0% 98%;             /* Solid white button */
+    --primary-foreground: 0 0% 4.5%; /* Black text */
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 0 0% 9%;            /* Deep secondary element #171717 */
+    --secondary-foreground: 0 0% 98%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 0 0% 9%;
+    --muted-foreground: 0 0% 63.9%;  /* Muted silver grey #a3a3a3 */
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 0 0% 12%;              /* Hover states #1f1f1f */
+    --accent-foreground: 0 0% 98%;
 
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --border: 0 0% 11%;              /* Subtle border #1c1c1c */
+    --input: 0 0% 11%;
+    --ring: 0 0% 98%;
   }
 }
 
@@ -67,5 +67,82 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+}
+
+/* Custom premium design system additions from the reference image */
+@layer utilities {
+  /* Vibrant Bokeh Gradient Background */
+  .bg-bokeh {
+    background-color: hsl(0, 0%, 2%);
+    background-image:
+      radial-gradient(at 0% 0%, rgba(147, 51, 234, 0.16) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(59, 130, 246, 0.12) 0px, transparent 50%),
+      radial-gradient(at 50% 100%, rgba(20, 184, 166, 0.12) 0px, transparent 50%),
+      radial-gradient(at 90% 80%, rgba(236, 72, 153, 0.08) 0px, transparent 40%);
+  }
+
+  /* Spotlight Beams from top corners */
+  .bg-beams {
+    position: relative;
+  }
+  .bg-beams::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: 
+      conic-gradient(from 125deg at 12% 0%, transparent 0%, rgba(255, 255, 255, 0.05) 15%, transparent 30%),
+      conic-gradient(from 205deg at 88% 0%, transparent 0%, rgba(255, 255, 255, 0.05) 15%, transparent 30%);
+    mask-image: radial-gradient(circle at 50% 0%, black 15%, transparent 80%);
+    -webkit-mask-image: radial-gradient(circle at 50% 0%, black 15%, transparent 80%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Dynamic Grid Background */
+  .bg-grid-dark {
+    background-size: 50px 50px;
+    background-image: 
+      linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  }
+
+  /* Spotlight Background Glow */
+  .bg-spotlight {
+    background: radial-gradient(
+      800px circle at 50% 200px,
+      rgba(255, 255, 255, 0.04),
+      transparent 80%
+    );
+  }
+
+  /* Premium Obsidian Glossy Card */
+  .card-glossy {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.005) 100%), #0c0c0c;
+    border: 1px solid rgba(255, 255, 255, 0.075);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .card-glossy:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 1px 1px rgba(255, 255, 255, 0.1) inset;
+  }
+
+  /* Sleek Glass Button */
+  .btn-glass {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    transition: background 0.2s ease, border-color 0.2s ease;
+  }
+
+  .btn-glass:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
   }
 }

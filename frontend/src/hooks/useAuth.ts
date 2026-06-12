@@ -11,7 +11,12 @@ export function useRequireAuth() {
   const { user, hydrated, setSession, setHydrated, clear } = useAuthStore();
 
   useEffect(() => {
-    if (hydrated) return;
+    if (hydrated) {
+      if (!user) {
+        router.replace('/login');
+      }
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -20,10 +25,8 @@ export function useRequireAuth() {
         setSession(res.user, res.accessToken);
       } catch (err) {
         if (cancelled) return;
-        if (err instanceof ApiClientError && err.status === 401) {
-          clear();
-          router.replace('/login');
-        }
+        clear();
+        router.replace('/login');
       } finally {
         if (!cancelled) setHydrated(true);
       }
@@ -31,7 +34,7 @@ export function useRequireAuth() {
     return () => {
       cancelled = true;
     };
-  }, [hydrated, setSession, setHydrated, clear, router]);
+  }, [hydrated, user, setSession, setHydrated, clear, router]);
 
   return { user, ready: hydrated };
 }
