@@ -35,7 +35,7 @@ COPY backend/ .
 # Switch to non-root user
 USER app
 
-EXPOSE 4000
+EXPOSE 8000
 
 # Run migrations then start the server
 CMD ["sh", "-c", "alembic upgrade head && python run.py"]
