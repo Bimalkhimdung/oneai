@@ -1,6 +1,11 @@
 name: local-ai-hub-dev
 
 services:
+  # ── Backing services (infrastructure only) ────────────────────────────────
+  # Run the API and web frontend locally with:
+  #   cd backend && python run.py
+  #   cd frontend && npm run dev
+
   postgres:
     image: pgvector/pgvector:pg16
     restart: unless-stopped

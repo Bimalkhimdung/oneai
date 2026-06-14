@@ -1,32 +1,41 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:20-alpine AS base
-RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
-WORKDIR /repo
+# ── Stage 1: Python deps ────────────────────────────────────────────────────
+FROM python:3.11-slim AS deps
 
-FROM base AS deps
-COPY pnpm-workspace.yaml package.json ./
-COPY apps/api/package.json apps/api/package.json
-COPY packages/shared/package.json packages/shared/package.json
-RUN pnpm install --frozen-lockfile=false
+# Install build tools needed by some Python packages (e.g. psycopg2, pgvector)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential \
+      libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-FROM base AS build
-COPY --from=deps /repo/node_modules ./node_modules
-COPY --from=deps /repo/apps/api/node_modules ./apps/api/node_modules
-COPY --from=deps /repo/packages/shared/node_modules ./packages/shared/node_modules
-COPY . .
-RUN pnpm --filter @local-ai-hub/api exec prisma generate
-RUN pnpm --filter @local-ai-hub/api run build
-
-FROM node:20-alpine AS runner
 WORKDIR /app
-ENV NODE_ENV=production
-RUN addgroup -S app && adduser -S app -G app
-COPY --from=build /repo/apps/api/dist ./dist
-COPY --from=build /repo/apps/api/prisma ./prisma
-COPY --from=build /repo/node_modules ./node_modules
-COPY --from=build /repo/apps/api/node_modules ./apps/api/node_modules
-COPY --from=build /repo/packages/shared ./packages/shared
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ── Stage 2: Runtime ────────────────────────────────────────────────────────
+FROM python:3.11-slim AS runner
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a non-root user
+RUN addgroup --system app && adduser --system --ingroup app app
+
+WORKDIR /app
+
+# Copy installed packages from deps stage
+COPY --from=deps /usr/local/lib/python3.11 /usr/local/lib/python3.11
+COPY --from=deps /usr/local/bin /usr/local/bin
+
+# Copy the backend source
+COPY backend/ .
+
+# Switch to non-root user
 USER app
+
 EXPOSE 4000
-CMD ["node", "dist/server.js"]
+
+# Run migrations then start the server
+CMD ["sh", "-c", "alembic upgrade head && python run.py"]

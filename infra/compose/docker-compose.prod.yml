@@ -1,8 +1,10 @@
 name: local-ai-hub
 
 services:
+  # ── Backing services ──────────────────────────────────────────────────────
+
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -13,6 +15,7 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
+      timeout: 5s
       retries: 10
 
   redis:
@@ -24,7 +27,10 @@ services:
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
+      timeout: 3s
       retries: 10
+
+  # ── Application services ──────────────────────────────────────────────────
 
   api:
     build:
@@ -32,14 +38,16 @@ services:
       dockerfile: infra/docker/api.Dockerfile
     restart: unless-stopped
     environment:
-      NODE_ENV: production
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      API_PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_REFRESH_TTL_DAYS: ${JWT_REFRESH_TTL_DAYS:-30}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       WEB_ORIGIN: ${WEB_ORIGIN}
-      API_PORT: 4000
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -53,8 +61,11 @@ services:
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL}
-    depends_on: [api]
+    depends_on:
+      api: { condition: service_started }
     expose: ["3000"]
+
+  # ── Reverse proxy ─────────────────────────────────────────────────────────
 
   caddy:
     image: caddy:2-alpine

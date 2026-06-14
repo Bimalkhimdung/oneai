@@ -1,27 +1,34 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:20-alpine AS base
-RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
-WORKDIR /repo
+# ── Stage 1: Install dependencies ───────────────────────────────────────────
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
 
-FROM base AS deps
-COPY pnpm-workspace.yaml package.json ./
-COPY apps/web/package.json apps/web/package.json
-COPY packages/shared/package.json packages/shared/package.json
-RUN pnpm install --frozen-lockfile=false
+# ── Stage 2: Build Next.js app ───────────────────────────────────────────────
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY frontend/ .
+ENV NODE_ENV=production
+RUN npm run build
 
-FROM base AS build
-COPY --from=deps /repo/node_modules ./node_modules
-COPY . .
-RUN pnpm --filter @local-ai-hub/web run build
-
+# ── Stage 3: Production runner ───────────────────────────────────────────────
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+
+# Create a non-root user
 RUN addgroup -S app && adduser -S app -G app
-COPY --from=build /repo/apps/web/.next/standalone ./
-COPY --from=build /repo/apps/web/.next/static ./apps/web/.next/static
-COPY --from=build /repo/apps/web/public ./apps/web/public
+
+# Copy only the standalone output for minimal image size
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static
+COPY --from=build /app/public ./public
+
 USER app
+
 EXPOSE 3000
-CMD ["node", "apps/web/server.js"]
+
+CMD ["node", "server.js"]
