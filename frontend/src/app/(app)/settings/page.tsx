@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import { Download, Terminal, CheckCircle2, AlertCircle, RefreshCw, Cpu, Database } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
@@ -15,10 +16,6 @@ interface ProviderInstallInfo {
   status: 'idle' | 'installing' | 'completed' | 'installed' | 'failed';
   logs: string[];
   progress: number;
-}
-
-interface InstallationsResponse {
-  [key: string]: ProviderInstallInfo;
 }
 
 interface InstallationsResponse {
@@ -38,8 +35,6 @@ function Badge({ children, className, variant = "default", ...props }: React.HTM
     </div>
   );
 }
-
-import { Progress } from '@/components/ui/progress';
 
 const PROVIDERS = [
   {

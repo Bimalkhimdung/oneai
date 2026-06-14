@@ -480,11 +480,13 @@ export default function OnboardingPage() {
                     </div>
 
                     {/* Installer controls revealed next to the card in the same row */}
-                    <div className="flex flex-col sm:flex-row gap-4 items-center w-full md:w-auto justify-end">
-                      {(() => {
-                        const info = installations?.[activeProviderData.id] || { status: 'idle', logs: [], progress: 0 };
-                        const isInstalling = info.status === 'installing';
-                        const isInstalled = info.status === 'installed' || info.status === 'completed';
+                  <div className="flex flex-col sm:flex-row gap-4 items-center w-full md:w-auto justify-end">
+                    {(() => {
+                      const info = selectedLocal
+                        ? installations?.[selectedLocal] ?? { status: 'idle', logs: [], progress: 0 }
+                        : { status: 'idle', logs: [], progress: 0 };
+                      const isInstalling = info.status === 'installing';
+                      const isInstalled = info.status === 'installed' || info.status === 'completed';
 
                         return (
                           <div className="flex flex-col gap-2 w-full sm:w-auto">

@@ -64,7 +64,7 @@ export default function ChatIndexPage() {
   };
 
   if (!selectedModel && availableModels.length > 0) {
-    setSelectedModel(availableModels[0].id);
+    setSelectedModel(availableModels[0]?.id ?? '');
   }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {

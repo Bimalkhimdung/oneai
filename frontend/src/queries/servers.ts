@@ -33,7 +33,7 @@ export function useDeleteServer() {
 export function useTestServer() {
   return useMutation({
     mutationFn: (input: { host: string; port: number; provider: string; apiKey?: string }) =>
-      api<{ ok: boolean; version: string | null; error?: string; latencyMs: number }>(
+      api<{ ok: boolean; version: string | null; error?: string; latencyMs: number; models?: Array<{ id: string; name: string; [key: string]: unknown }> }>(
         '/servers/test',
         { method: 'POST', body: JSON.stringify(input) },
       ),

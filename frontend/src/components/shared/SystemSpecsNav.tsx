@@ -16,7 +16,7 @@ export function SystemSpecsNav() {
   useEffect(() => {
     const fetchSpecs = async () => {
       try {
-        const data = await api('/settings/system-specs');
+        const data = await api<SystemSpecs>('/settings/system-specs');
         setSpecs(data);
       } catch (err) {
         console.error('Failed to fetch system specs:', err);

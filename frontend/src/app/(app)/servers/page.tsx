@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useServers, useDeleteServer } from '@/queries/servers';
 import { toast } from 'sonner';
-import { Server, Plus, Network, Cpu, Trash2, PowerOff, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Server, Plus, Network, Cpu, Trash2, PowerOff, CheckCircle2, AlertCircle, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function ServersPage() {
@@ -148,14 +148,15 @@ export default function ServersPage() {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { color: string; icon: any }> = {
+  const fallback = { color: 'text-amber-500 bg-amber-500/10 border-amber-500/20', icon: AlertCircle };
+  const map: Record<string, { color: string; icon: LucideIcon }> = {
     ONLINE: { color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20', icon: CheckCircle2 },
     OFFLINE: { color: 'text-zinc-500 bg-zinc-500/10 border-zinc-500/20', icon: PowerOff },
     ERROR: { color: 'text-red-500 bg-red-500/10 border-red-500/20', icon: AlertCircle },
-    UNKNOWN: { color: 'text-amber-500 bg-amber-500/10 border-amber-500/20', icon: AlertCircle },
+    UNKNOWN: fallback,
   };
   
-  const config = map[status] || map.UNKNOWN;
+  const config = map[status] ?? fallback;
   const Icon = config.icon;
   
   return (

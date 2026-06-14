@@ -22,6 +22,7 @@ export interface ServerDto {
   version: string | null;
   lastSeenAt: string | null;
   createdAt: string;
+  models: Array<{ id: string; name: string; [key: string]: unknown }>;
 }
 
 export interface ModelDto {
