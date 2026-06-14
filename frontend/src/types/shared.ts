@@ -121,6 +121,7 @@ export interface CreateChatInput {
 
 export interface SendMessageInput {
   content: string;
+  web_search?: boolean;
 }
 
 export interface UpdateChatInput {

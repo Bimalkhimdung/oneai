@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Local AI Hub | Run Private AI On Your Own Machine</title>
+    <meta
+      name="description"
+      content="Local AI Hub is a beginner-friendly web UI for installing, managing, and chatting with on-premise AI models using FastAPI, Next.js, PostgreSQL, Redis, and Docker."
+    />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="Local AI Hub home">
+        <img src="/assets/local-ai-hub.png" alt="" />
+        <span>Local AI Hub</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary navigation">
+        <a href="#why">Why</a>
+        <a href="#solves">Solves</a>
+        <a href="#install">Install</a>
+        <a href="#run">Run</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero section-band">
+        <div class="hero-copy">
+          <p class="eyebrow">Local AI Hub &mdash; Yours for the voyage.</p>
+          <h1>Your own private AI hub,<br>running on your hardware.</h1>
+          <p class="hero-text">
+            Local AI Hub is a self-hosted interface for talking to language models — chat, documents, model management, realtime streaming, and Docker-powered services. Local-first, privacy-first, no telemetry. Just you and your models.<br><br>
+            <span style="opacity: 0.7; font-size: 0.85em;">(if you want to wire in an external API too — that's fine, I'm not here to tell you how to live your life…)</span>
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#install">Start installation</a>
+            <a class="button secondary" href="#demo">Live demo</a>
+          </div>
+        </div>
+      </section>
+
+      <section id="why" class="content-section">
+        <div class="section-heading">
+          <p class="eyebrow">Why it matters</p>
+          <h2>Local AI should be usable by people who are not infrastructure experts.</h2>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card">
+            <h3>Privacy first</h3>
+            <p>
+              Conversations, documents, and model traffic can stay inside your own machine or network
+              instead of being sent to a hosted AI provider by default.
+            </p>
+          </article>
+          <article class="feature-card">
+            <h3>Lower friction</h3>
+            <p>
+              The project turns model management, chat, document upload, and server configuration into
+              a guided web experience instead of scattered terminal commands.
+            </p>
+          </article>
+          <article class="feature-card">
+            <h3>Open foundation</h3>
+            <p>
+              It uses common building blocks: Next.js, FastAPI, PostgreSQL with pgvector, Redis,
+              Socket.IO, and Docker Compose.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="solves" class="content-section">
+        <div class="section-heading">
+          <p class="eyebrow">What it solves</p>
+          <h2>A single workspace for local models, chat, and document context.</h2>
+        </div>
+        <div class="solve-list">
+          <div>
+            <span>01</span>
+            <p>Connect local inference nodes such as Ollama and keep installed models visible in the UI.</p>
+          </div>
+          <div>
+            <span>02</span>
+            <p>Chat with realtime streamed responses through Socket.IO instead of waiting on a static request.</p>
+          </div>
+          <div>
+            <span>03</span>
+            <p>Upload documents and use pgvector-backed retrieval so answers can include your own context.</p>
+          </div>
+          <div>
+            <span>04</span>
+            <p>Use optional web search when current information is more important than model memory.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="demo" class="content-section">
+        <div class="section-heading">
+          <p class="eyebrow">Live Demo</p>
+          <h2>Experience the speed of local inference.</h2>
+        </div>
+        <div class="chat-demo-container">
+          <div class="chat-message user-message">
+            <div class="avatar">U</div>
+            <div class="message-body">
+              <p id="demo-user-text"></p>
+            </div>
+          </div>
+          <div class="chat-message ai-message" id="demo-ai-container" style="display: none; opacity: 0; transition: opacity 0.3s ease;">
+            <div class="avatar">AI</div>
+            <div class="message-body">
+              <p id="demo-ai-text"></p>
+              <pre id="demo-ai-code-container" style="display: none;"><code id="demo-ai-code"></code></pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="install" class="content-section install-section">
+        <div class="section-heading">
+          <p class="eyebrow">Installation</p>
+          <h2>Install once, then run the API and web app locally.</h2>
+        </div>
+
+        <div class="os-grid">
+          <article class="install-card">
+            <h3>Windows</h3>
+            <ol>
+              <li>Install Git for Windows.</li>
+              <li>Install Docker Desktop and enable WSL 2 integration.</li>
+              <li>Install Python 3.11 or newer.</li>
+              <li>Install Node.js 20 LTS or newer.</li>
+              <li>Install Ollama for Windows if you want local model hosting.</li>
+            </ol>
+            <pre><code>git clone &lt;your-repo-url&gt;
+cd oneai
+docker compose -f infra/compose/docker-compose.dev.yml up -d
+cd backend
+py -3 -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+alembic upgrade head
+python run.py</code></pre>
+            <pre><code>cd frontend
+npm install
+npm run dev</code></pre>
+          </article>
+
+          <article class="install-card">
+            <h3>macOS</h3>
+            <ol>
+              <li>Install Homebrew if it is not already installed.</li>
+              <li>Install Docker Desktop for Mac.</li>
+              <li>Install Python, Node.js, and Git.</li>
+              <li>Install Ollama if you want to run local models.</li>
+            </ol>
+            <pre><code>brew install git python node
+git clone &lt;your-repo-url&gt;
+cd oneai
+docker compose -f infra/compose/docker-compose.dev.yml up -d
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+alembic upgrade head
+python run.py</code></pre>
+            <pre><code>cd frontend
+npm install
+npm run dev</code></pre>
+          </article>
+
+          <article class="install-card">
+            <h3>Linux</h3>
+            <ol>
+              <li>Install Git, Python 3, venv, Node.js 20 LTS or newer, and Docker Engine.</li>
+              <li>Start Docker and make sure your user can run Docker commands.</li>
+              <li>Install Ollama if you want local inference on the same machine.</li>
+            </ol>
+            <pre><code>sudo apt update
+sudo apt install -y git python3 python3-venv python3-pip nodejs npm
+git clone &lt;your-repo-url&gt;
+cd oneai
+docker compose -f infra/compose/docker-compose.dev.yml up -d
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+alembic upgrade head
+python run.py</code></pre>
+            <pre><code>cd frontend
+npm install
+npm run dev</code></pre>
+          </article>
+        </div>
+      </section>
+
+      <section id="run" class="content-section">
+        <div class="section-heading">
+          <p class="eyebrow">Run and verify</p>
+          <h2>Open the web UI and connect your first local model server.</h2>
+        </div>
+        <div class="run-steps">
+          <div>
+            <strong>1. Services</strong>
+            <p>PostgreSQL with pgvector runs on port <code>5433</code>. Redis runs on <code>6379</code>.</p>
+          </div>
+          <div>
+            <strong>2. Backend</strong>
+            <p>Start from <code>backend/</code> with <code>python run.py</code>. API runs at <code>http://localhost:4000</code>.</p>
+          </div>
+          <div>
+            <strong>3. Frontend</strong>
+            <p>Start from <code>frontend/</code> with <code>npm run dev</code>. Web app runs at <code>http://localhost:3000</code>.</p>
+          </div>
+          <div>
+            <strong>4. Embeddings</strong>
+            <p>Install <code>nomic-embed-text</code> on your active local server to use document upload and RAG.</p>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="site-footer">
+      <span>Local AI Hub</span>
+      <a href="#top">Back to top</a>
+    </footer>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

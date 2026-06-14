@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSocket } from '@/hooks/useSocket';
 import { useCreateChat } from '@/queries/chats';
@@ -8,7 +8,7 @@ import { useServers } from '@/queries/servers';
 import { api, ApiClientError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Bot, Send, Loader2, Plus, Mic } from 'lucide-react';
+import { Bot, Send, Loader2, Plus, Mic, FileText, Globe, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { MissingModelAlert } from '@/components/chat/MissingModelAlert';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
@@ -25,12 +25,26 @@ export default function ChatIndexPage() {
   const [isStarting, setIsStarting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [showMissingModel, setShowMissingModel] = useState(false);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const handleSpeechResult = (text: string) => {
     setDraft(prev => prev + text);
   };
   const { isListening, toggleListening, supported: speechSupported } = useSpeechRecognition(handleSpeechResult);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const availableModels = servers?.flatMap((s) => s.models || []) || [];
 
@@ -95,7 +109,7 @@ export default function ChatIndexPage() {
       
       await api(`/chats/${chat.id}/messages`, {
         method: 'POST',
-        body: JSON.stringify({ content: draft })
+        body: JSON.stringify({ content: draft, web_search: webSearchEnabled })
       });
 
       router.push(`/chat/${chat.id}`);
@@ -128,25 +142,82 @@ export default function ChatIndexPage() {
                 className="hidden" 
                 accept=".txt,.md,.csv,.json,.js,.py,.html,.css,.ts,.tsx,.pdf"
               />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading || isStarting}
-                className="absolute left-2 top-1/2 -translate-y-1/2 h-10 w-10 text-muted-foreground hover:text-foreground hover:bg-card/50 rounded-full z-10"
-                title="Attach Document"
-              >
-                {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-              </Button>
+              <div className="absolute left-2 top-1/2 z-20 -translate-y-1/2" ref={menuRef}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setMenuOpen(!menuOpen)}
+                  disabled={isUploading || isStarting}
+                  className={cn(
+                    "h-10 w-10 rounded-full text-muted-foreground hover:text-foreground hover:bg-card/50",
+                    webSearchEnabled && "text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10"
+                  )}
+                  title="Options"
+                >
+                  {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+                  {webSearchEnabled && (
+                    <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-emerald-500" />
+                  )}
+                </Button>
+                {menuOpen && (
+                  <div className="absolute left-0 bottom-full mb-2 z-50 w-44 rounded-xl border border-border/80 bg-card p-1 shadow-md animate-in fade-in slide-in-from-bottom-2 duration-150">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        fileInputRef.current?.click();
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold hover:bg-muted text-foreground transition-colors"
+                    >
+                      <FileText className="w-4 h-4 text-muted-foreground" />
+                      <span>Attach file</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWebSearchEnabled(!webSearchEnabled);
+                        setMenuOpen(false);
+                      }}
+                      className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold hover:bg-muted text-foreground transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Globe className="w-4 h-4 text-muted-foreground" />
+                        <span>Web search</span>
+                      </div>
+                      <div className={cn(
+                        "h-2 w-2 rounded-full transition-all duration-300",
+                        webSearchEnabled ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-muted-foreground/30"
+                      )} />
+                    </button>
+                  </div>
+                )}
+              </div>
               <Input
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder="Message local AI..."
-                className="rounded-[1px] h-14 pl-14 pr-24 bg-transparent border-0 focus-visible:ring-0 text-base shadow-none"
+                className={cn(
+                  "rounded-[1px] h-14 pl-14 pr-24 bg-transparent border-0 focus-visible:ring-0 text-base shadow-none",
+                  webSearchEnabled && "pl-40"
+                )}
                 disabled={isStarting || isUploading}
                 autoFocus
               />
+              {webSearchEnabled && (
+                <div className="absolute left-14 top-1/2 z-10 flex -translate-y-1/2 items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                  <Globe className="h-3 w-3" />
+                  <span>Web on</span>
+                  <button
+                    type="button"
+                    onClick={() => setWebSearchEnabled(false)}
+                    className="-mr-1 flex h-4 w-4 items-center justify-center rounded-full text-emerald-600 hover:bg-emerald-500/20 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
+                    aria-label="Turn off web search"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 z-10">
                 {speechSupported && (
                   <Button

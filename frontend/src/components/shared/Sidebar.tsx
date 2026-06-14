@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth';
 import {
@@ -21,9 +22,9 @@ const items = [
   { href: '/servers', label: 'AI Servers', icon: Server },
   { href: '/models', label: 'Models', icon: Boxes },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
-  { 
-    href: '/settings', 
-    label: 'Settings', 
+  {
+    href: '/settings',
+    label: 'Settings',
     icon: Settings,
     subItems: [
       { href: '/settings', label: 'Model Provider' },
@@ -48,13 +49,15 @@ export function Sidebar() {
   return (
     <aside className="hidden w-60 shrink-0 border-r bg-muted/10 md:flex md:flex-col justify-between">
       <div className="flex flex-col flex-1 min-h-0">
-        <div className="flex h-14 items-center border-b px-5 font-semibold">Local AI Hub</div>
+        <div className="flex h-14 items-center gap-2.5 border-b px-5">
+          <Image src="/logo/hero/local.svg" alt="Local AI Logo" width={20} height={100} className="h-[110%] w-auto max-h-20" priority />
+        </div>
         <nav className="flex-1 space-y-1.5 p-3 overflow-y-auto">
           {items.map((item) => {
             const Icon = item.icon;
             const hasSubItems = 'subItems' in item && item.subItems.length > 0;
             const active = pathname === item.href || ('subItems' in item && item.subItems.some(sub => pathname === sub.href || pathname?.startsWith(sub.href + '/')));
-            
+
             return (
               <div key={item.href} className="flex flex-col">
                 {hasSubItems ? (
