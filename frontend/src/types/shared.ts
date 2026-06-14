@@ -122,6 +122,7 @@ export interface CreateChatInput {
 export interface SendMessageInput {
   content: string;
   web_search?: boolean;
+  mcp_enabled?: boolean;
 }
 
 export interface UpdateChatInput {
@@ -132,6 +133,49 @@ export interface UpdateChatInput {
 export interface CompareInput {
   prompt: string;
   modelIds: string[];
+}
+
+export type McpTransport = 'STDIO' | 'SSE';
+
+export interface McpServerDto {
+  id: string;
+  name: string;
+  transport: McpTransport;
+  command: string | null;
+  args: string[] | null;
+  env: Record<string, string> | null;
+  url: string | null;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateMcpServerInput {
+  name: string;
+  transport?: McpTransport;
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  url?: string;
+  enabled?: boolean;
+}
+
+export interface UpdateMcpServerInput {
+  name?: string;
+  transport?: McpTransport;
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  url?: string;
+  enabled?: boolean;
+}
+
+export interface McpTestResultDto {
+  ok: boolean;
+  toolCount: number;
+  resourceCount: number;
+  tools: string[];
+  error?: string | null;
 }
 
 // Socket.IO events contract

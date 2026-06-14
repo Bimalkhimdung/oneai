@@ -16,6 +16,30 @@ npm run dev
 
 Open `http://127.0.0.1:5174`.
 
+## MCP SSE test server (port 8080)
+
+For testing the backend MCP **SSE** transport in Settings → MCP Servers:
+
+```bash
+npm run mcp:sse
+```
+
+Then add an MCP server with:
+
+- **Transport:** SSE
+- **URL:** `http://127.0.0.1:8080/sse`
+
+Verify:
+
+```bash
+curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/
+```
+
+Use **Test** on the server in `/settings/mcp`, or enable MCP in chat and ask e.g. "what time is it?" or "run project_info".
+
+Available test tools: `echo`, `get_time`, `project_info`.
+
 ## Build
 
 ```bash

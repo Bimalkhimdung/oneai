@@ -165,6 +165,15 @@ async def send_message(db: AsyncSession, chat_id: str, user_id: str, input_data:
         except Exception as e:
             logger.warning(f"Failed to perform web search: {e}")
 
+    # Check for MCP tools
+    mcp_context = ""
+    if input_data.mcp_enabled:
+        from app.services.mcp import gather_mcp_context
+        try:
+            mcp_context = await gather_mcp_context(db, user_id, input_data.content)
+        except Exception as e:
+            logger.warning(f"Failed to gather MCP context: {e}")
+
     # Check for relevant document chunks (RAG)
     from app.services.rag import query_relevant_chunks
     relevant_chunks = []
@@ -174,20 +183,23 @@ async def send_message(db: AsyncSession, chat_id: str, user_id: str, input_data:
         logger.warning(f"Failed to query RAG chunks: {e}")
 
     # Build prompt context
-    if web_context or relevant_chunks:
+    if web_context or mcp_context or relevant_chunks:
         context_parts = []
         if relevant_chunks:
             context_parts.append("--- DOCUMENT CONTEXT ---\n" + "\n\n".join(relevant_chunks))
         if web_context:
             context_parts.append(f"--- WEB SEARCH RESULTS ---\n{web_context}")
+        if mcp_context:
+            context_parts.append(mcp_context)
             
         context_text = "\n\n".join(context_parts)
         today = datetime.date.today().isoformat()
         rag_prompt = (
-            f"Use the following context (documents/web search results) to answer the user's query.\n"
+            f"Use the following context (documents/web search/MCP tool results) to answer the user's query.\n"
             f"The current date is {today}. For questions about current office holders, status, prices, news, "
             f"or other time-sensitive facts, prioritize the most recent reliable sources and ignore older "
             f"sources when they conflict.\n"
+            f"When MCP tool results are present, prefer those for factual answers. "
             f"Provide a detailed response based on the context. Cite the source URL if using web results.\n\n"
             f"<context>\n{context_text}\n</context>\n\n"
             f"Query: {input_data.content}"

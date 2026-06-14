@@ -17,3 +17,4 @@ pgvector
 alembic
 langchain-text-splitters
 PyMuPDF
+mcp

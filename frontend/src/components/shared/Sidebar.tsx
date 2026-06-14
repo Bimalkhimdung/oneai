@@ -28,6 +28,7 @@ const items = [
     icon: Settings,
     subItems: [
       { href: '/settings', label: 'Model Provider' },
+      { href: '/settings/mcp', label: 'MCP Servers' },
       { href: '/settings/api', label: 'Api Configuration' }
     ]
   },

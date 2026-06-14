@@ -51,6 +51,10 @@ class MessageRole(str, enum.Enum):
     ASSISTANT = "ASSISTANT"
     SYSTEM = "SYSTEM"
 
+class McpTransport(str, enum.Enum):
+    STDIO = "STDIO"
+    SSE = "SSE"
+
 class WorkspaceRole(str, enum.Enum):
     OWNER = "OWNER"
     ADMIN = "ADMIN"
@@ -75,6 +79,7 @@ class User(Base):
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
     workspaces = relationship("WorkspaceMember", back_populates="user", cascade="all, delete-orphan")
     settings = relationship("UserSettings", uselist=False, back_populates="user", cascade="all, delete-orphan")
+    mcp_servers = relationship("McpServer", back_populates="user", cascade="all, delete-orphan")
 
 
 class RefreshToken(Base):
@@ -259,6 +264,28 @@ class AuditLog(Base):
     __table_args__ = (
         Index("audit_logs_user_id_created_at_idx", "user_id", "created_at"),
         Index("audit_logs_entity_entity_id_idx", "entity", "entity_id"),
+    )
+
+
+class McpServer(Base):
+    __tablename__ = "mcp_servers"
+
+    id = Column(String, primary_key=True, default=generate_cuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    transport = Column(SQLEnum(McpTransport, native_enum=False), default=McpTransport.STDIO, nullable=False)
+    command = Column(String, nullable=True)
+    args = Column(JSON, nullable=True)
+    env = Column(JSON, nullable=True)
+    url = Column(String, nullable=True)
+    enabled = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
+
+    user = relationship("User", back_populates="mcp_servers")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="mcp_servers_user_id_name_key"),
     )
 
 

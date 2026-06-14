@@ -8,16 +8,18 @@ import { useServers } from '@/queries/servers';
 import { api, ApiClientError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Bot, Send, Loader2, Plus, Mic, FileText, Globe, X } from 'lucide-react';
+import { Bot, Send, Loader2, Plus, Mic, FileText, Globe, Plug, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { MissingModelAlert } from '@/components/chat/MissingModelAlert';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
+import { useMcpServers } from '@/queries/mcp';
 import { cn } from '@/lib/utils';
 
 export default function ChatIndexPage() {
   useSocket();
   const router = useRouter();
   const { data: servers } = useServers();
+  const { data: mcpServers } = useMcpServers();
   const createChat = useCreateChat();
 
   const [draft, setDraft] = useState('');
@@ -26,6 +28,7 @@ export default function ChatIndexPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [showMissingModel, setShowMissingModel] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [mcpEnabled, setMcpEnabled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -47,6 +50,18 @@ export default function ChatIndexPage() {
   }, []);
 
   const availableModels = servers?.flatMap((s) => s.models || []) || [];
+  const enabledMcpCount = mcpServers?.filter((s) => s.enabled).length ?? 0;
+
+  const toggleMcp = () => {
+    if (!mcpEnabled && enabledMcpCount === 0) {
+      toast.error('Add an MCP server in Settings first', {
+        action: { label: 'Settings', onClick: () => router.push('/settings/mcp') },
+      });
+      return;
+    }
+    setMcpEnabled(!mcpEnabled);
+    setMenuOpen(false);
+  };
 
   if (!selectedModel && availableModels.length > 0) {
     setSelectedModel(availableModels[0].id);
@@ -109,7 +124,7 @@ export default function ChatIndexPage() {
       
       await api(`/chats/${chat.id}/messages`, {
         method: 'POST',
-        body: JSON.stringify({ content: draft, web_search: webSearchEnabled })
+        body: JSON.stringify({ content: draft, web_search: webSearchEnabled, mcp_enabled: mcpEnabled })
       });
 
       router.push(`/chat/${chat.id}`);
@@ -151,13 +166,17 @@ export default function ChatIndexPage() {
                   disabled={isUploading || isStarting}
                   className={cn(
                     "h-10 w-10 rounded-full text-muted-foreground hover:text-foreground hover:bg-card/50",
-                    webSearchEnabled && "text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10"
+                    (webSearchEnabled || mcpEnabled) && "text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10",
+                    mcpEnabled && !webSearchEnabled && "text-violet-500 hover:text-violet-600 hover:bg-violet-500/10"
                   )}
                   title="Options"
                 >
                   {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
                   {webSearchEnabled && (
                     <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-emerald-500" />
+                  )}
+                  {mcpEnabled && !webSearchEnabled && (
+                    <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-violet-500" />
                   )}
                 </Button>
                 {menuOpen && (
@@ -190,6 +209,20 @@ export default function ChatIndexPage() {
                         webSearchEnabled ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-muted-foreground/30"
                       )} />
                     </button>
+                    <button
+                      type="button"
+                      onClick={toggleMcp}
+                      className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold hover:bg-muted text-foreground transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Plug className="w-4 h-4 text-muted-foreground" />
+                        <span>MCP tools</span>
+                      </div>
+                      <div className={cn(
+                        "h-2 w-2 rounded-full transition-all duration-300",
+                        mcpEnabled ? "bg-violet-500 shadow-[0_0_8px_rgba(139,92,246,0.5)]" : "bg-muted-foreground/30"
+                      )} />
+                    </button>
                   </div>
                 )}
               </div>
@@ -199,7 +232,7 @@ export default function ChatIndexPage() {
                 placeholder="Message local AI..."
                 className={cn(
                   "rounded-[1px] h-14 pl-14 pr-24 bg-transparent border-0 focus-visible:ring-0 text-base shadow-none",
-                  webSearchEnabled && "pl-40"
+                  (webSearchEnabled || mcpEnabled) && "pl-40"
                 )}
                 disabled={isStarting || isUploading}
                 autoFocus
@@ -213,6 +246,23 @@ export default function ChatIndexPage() {
                     onClick={() => setWebSearchEnabled(false)}
                     className="-mr-1 flex h-4 w-4 items-center justify-center rounded-full text-emerald-600 hover:bg-emerald-500/20 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
                     aria-label="Turn off web search"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+              {mcpEnabled && (
+                <div className={cn(
+                  "absolute top-1/2 z-10 flex -translate-y-1/2 items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-1 text-xs font-semibold text-violet-600 dark:text-violet-400",
+                  webSearchEnabled ? "left-36" : "left-14"
+                )}>
+                  <Plug className="h-3 w-3" />
+                  <span>MCP on</span>
+                  <button
+                    type="button"
+                    onClick={() => setMcpEnabled(false)}
+                    className="-mr-1 flex h-4 w-4 items-center justify-center rounded-full text-violet-600 hover:bg-violet-500/20 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300"
+                    aria-label="Turn off MCP tools"
                   >
                     <X className="h-3 w-3" />
                   </button>

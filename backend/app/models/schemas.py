@@ -58,10 +58,47 @@ class CreateChatInput(BaseModel):
 class SendMessageInput(BaseModel):
     content: str = Field(..., min_length=1, max_length=64000)
     web_search: bool = False
+    mcp_enabled: bool = False
 
 class UpdateChatInput(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=120)
     pinned: Optional[bool] = None
+
+class CreateMcpServerInput(BaseModel):
+    name: str = Field(..., min_length=1, max_length=60)
+    transport: str = Field(default="STDIO")
+    command: Optional[str] = Field(None, min_length=1, max_length=512)
+    args: Optional[List[str]] = None
+    env: Optional[Dict[str, str]] = None
+    url: Optional[str] = Field(None, max_length=2048)
+    enabled: bool = True
+
+    @field_validator("transport")
+    @classmethod
+    def validate_transport(cls, v):
+        upper = v.upper()
+        if upper not in ("STDIO", "SSE"):
+            raise ValueError("Transport must be STDIO or SSE.")
+        return upper
+
+class UpdateMcpServerInput(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=60)
+    transport: Optional[str] = None
+    command: Optional[str] = Field(None, min_length=1, max_length=512)
+    args: Optional[List[str]] = None
+    env: Optional[Dict[str, str]] = None
+    url: Optional[str] = Field(None, max_length=2048)
+    enabled: Optional[bool] = None
+
+    @field_validator("transport")
+    @classmethod
+    def validate_transport(cls, v):
+        if v is None:
+            return v
+        upper = v.upper()
+        if upper not in ("STDIO", "SSE"):
+            raise ValueError("Transport must be STDIO or SSE.")
+        return upper
 
 class CompareInput(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=16000)
@@ -131,3 +168,22 @@ class ChatDto(BaseModel):
 class ChatDetailDto(ChatDto):
     messages: List[MessageDto]
     documents: List[DocumentDto] = Field(default_factory=list)
+
+class McpServerDto(BaseModel):
+    id: str
+    name: str
+    transport: str
+    command: Optional[str] = None
+    args: Optional[List[str]] = None
+    env: Optional[Dict[str, str]] = None
+    url: Optional[str] = None
+    enabled: bool
+    createdAt: str
+    updatedAt: str
+
+class McpTestResultDto(BaseModel):
+    ok: bool
+    toolCount: int = 0
+    resourceCount: int = 0
+    tools: List[str] = Field(default_factory=list)
+    error: Optional[str] = None

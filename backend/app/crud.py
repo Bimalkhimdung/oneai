@@ -181,3 +181,49 @@ async def get_messages_for_chat(db: AsyncSession, chat_id: str) -> list[models.M
     stmt = select(models.Message).where(models.Message.chat_id == chat_id).order_by(models.Message.created_at.asc())
     result = await db.execute(stmt)
     return list(result.scalars().all())
+
+
+# MCP Server CRUD
+async def create_mcp_server(db: AsyncSession, user_id: str, **kwargs) -> models.McpServer:
+    server = models.McpServer(user_id=user_id, **kwargs)
+    db.add(server)
+    await db.commit()
+    await db.refresh(server)
+    return server
+
+async def list_mcp_servers_for_user(
+    db: AsyncSession,
+    user_id: str,
+    enabled_only: bool = False,
+) -> list[models.McpServer]:
+    stmt = select(models.McpServer).where(models.McpServer.user_id == user_id)
+    if enabled_only:
+        stmt = stmt.where(models.McpServer.enabled == True)
+    stmt = stmt.order_by(models.McpServer.created_at.desc())
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+async def get_mcp_server_by_id_and_user_id(
+    db: AsyncSession,
+    server_id: str,
+    user_id: str,
+) -> models.McpServer | None:
+    stmt = select(models.McpServer).where(
+        models.McpServer.id == server_id,
+        models.McpServer.user_id == user_id,
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+async def update_mcp_server(db: AsyncSession, server_id: str, **kwargs) -> models.McpServer | None:
+    stmt = update(models.McpServer).where(models.McpServer.id == server_id).values(**kwargs)
+    await db.execute(stmt)
+    await db.commit()
+    stmt_fetch = select(models.McpServer).where(models.McpServer.id == server_id)
+    res = await db.execute(stmt_fetch)
+    return res.scalar_one_or_none()
+
+async def delete_mcp_server(db: AsyncSession, server_id: str):
+    stmt = delete(models.McpServer).where(models.McpServer.id == server_id)
+    await db.execute(stmt)
+    await db.commit()

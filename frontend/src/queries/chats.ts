@@ -35,7 +35,7 @@ export function useCreateChat() {
 
 export function useSendMessage(chatId: string) {
   return useMutation({
-    mutationFn: (input: { content: string; web_search?: boolean }) =>
+    mutationFn: (input: { content: string; web_search?: boolean; mcp_enabled?: boolean }) =>
       api<{ userMessage: MessageDto; assistantMessage: MessageDto }>(
         `/chats/${chatId}/messages`,
         { method: 'POST', body: JSON.stringify(input) },
