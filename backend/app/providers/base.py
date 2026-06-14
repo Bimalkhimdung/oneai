@@ -49,3 +49,6 @@ class BaseProviderAdapter:
 
     async def remove(self, info: ProviderConnectInfo, model_name: str) -> None:
         raise NotImplementedError()
+
+    async def embed(self, info: ProviderConnectInfo, model: str, prompt: str) -> list[float]:
+        raise NotImplementedError()

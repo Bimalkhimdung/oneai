@@ -66,5 +66,9 @@ app.include_router(chats.router, prefix="/api/v1")
 app.include_router(settings_routes.router, prefix="/api/v1")
 
 # Combine FastAPI and Socket.IO into a single ASGI app
-# Socket.IO intercepts /socket.io requests, other requests go to FastAPI
+# Mount socket.io directly onto the FastAPI app so `uvicorn app.main:app` works natively!
+sio_asgi_app = socketio.ASGIApp(sio, socketio_path='')
+app.mount("/socket.io", sio_asgi_app)
+
+# Fallback for older setups that might use app.main:asgi_app
 asgi_app = socketio.ASGIApp(sio, other_asgi_app=app)

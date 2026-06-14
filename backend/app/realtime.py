@@ -2,13 +2,15 @@ import logging
 import socketio
 from app.lib.jwt import verify_access_token
 
+from app.config import settings
+
 logger = logging.getLogger("app.realtime")
 
 # Initialize Socket.IO server in async mode
 # Allowed origins will be checked against the origin sent by client
 sio = socketio.AsyncServer(
     async_mode="asgi",
-    cors_allowed_origins="*"  # For simplicity, or specify client domain
+    cors_allowed_origins=[settings.WEB_ORIGIN, "http://localhost:3000", "http://127.0.0.1:3000"]
 )
 
 # Wraps standard socketio server as an ASGI application

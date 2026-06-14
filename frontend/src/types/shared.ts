@@ -47,6 +47,13 @@ export interface MessageDto {
   createdAt: string;
 }
 
+export interface DocumentDto {
+  id: string;
+  chatId: string;
+  filename: string;
+  createdAt: string;
+}
+
 export interface ChatDto {
   id: string;
   title: string;
@@ -58,6 +65,7 @@ export interface ChatDto {
 
 export interface ChatDetailDto extends ChatDto {
   messages: MessageDto[];
+  documents: DocumentDto[];
 }
 
 export interface ApiError {

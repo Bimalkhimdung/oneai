@@ -42,3 +42,27 @@ export function useSendMessage(chatId: string) {
       ),
   });
 }
+
+export function useUploadDocument(chatId: string) {
+  return useMutation({
+    mutationFn: (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return api<{ message: string }>(`/chats/${chatId}/documents`, {
+        method: 'POST',
+        body: formData,
+      });
+    },
+  });
+}
+
+export function useDeleteChat() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api(`/chats/${id}`, { method: 'DELETE' }),
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: LIST_KEY });
+      qc.removeQueries({ queryKey: detailKey(id) });
+    },
+  });
+}

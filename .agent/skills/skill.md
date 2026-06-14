@@ -30,8 +30,9 @@ When building or updating the user interface, adhere to the following rules:
 ### 3. Build Constraints
 * **No Manual Builds:** Never execute the `npm run build` command yourself during development.
 
-### 4. Alway use custome conformation alert not use browser conformation alert.
-* **use:**@shared/components/ui/alert-dialog.tsx`` for conformation alert.
+### 4. Custom Notifications and Alerts Only
+* **No Native Alerts:** Never use the browser's native `alert()`, `confirm()`, or `prompt()` dialogs. Alert notifications and confirmations should always use custom boxes.
+* **use:** `@shared/components/ui/alert-dialog.tsx` for confirmation alerts, and standard UI components (like `sonner` toasts) for informational alerts.
 
 ### 5. UI/UX Rules:
 * **Consistent Styling:** Always use a consistent and professional color scheme and typography across the application. Adhere to the existing design system and component library (e.g., Tailwind CSS, Mantine, or your project's specific design tokens). Avoid introducing new, unharmonized styles.

@@ -276,3 +276,4 @@ class UserSettings(Base):
 # Expose database and schemas inside models folder package
 from . import database
 from . import schemas
+from .rag import Document, DocumentChunk

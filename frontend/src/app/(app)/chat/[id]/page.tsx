@@ -14,10 +14,9 @@ export default function ChatDetailPage() {
     return <p className="text-sm text-muted-foreground">Loading…</p>;
   }
   return (
-    <div className="flex h-[calc(100vh-7rem)] flex-col">
-      <h1 className="mb-3 text-xl font-semibold">{chat.title}</h1>
-      <div className="flex-1 overflow-hidden">
-        <ChatStream chatId={chat.id} initialMessages={chat.messages} />
+    <div className="flex h-[calc(100vh-3.5rem)] flex-col">
+      <div className="flex-1 overflow-hidden relative">
+        <ChatStream chatId={chat.id} initialMessages={chat.messages} initialDocuments={chat.documents || []} />
       </div>
     </div>
   );

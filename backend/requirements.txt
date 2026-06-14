@@ -13,3 +13,7 @@ cryptography
 psutil
 python-multipart
 python-dotenv
+pgvector
+alembic
+langchain-text-splitters
+PyMuPDF

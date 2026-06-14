@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, UploadFile, File, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import schemas, database
 from app import dependencies
@@ -54,3 +54,24 @@ async def send_message(
     db: AsyncSession = Depends(database.get_db)
 ):
     return await chat_service.send_message(db, id, current_user["id"], input_data)
+
+@router.post("/{id}/documents", status_code=status.HTTP_201_CREATED)
+async def upload_document(
+    id: str,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(dependencies.require_auth),
+    db: AsyncSession = Depends(database.get_db)
+):
+    from app.services.rag import check_embedding_model_installed, process_and_store_document
+    
+    # 1. Check if model exists
+    is_installed = await check_embedding_model_installed(db, id, current_user["id"])
+    if not is_installed:
+        raise HTTPException(
+            status_code=422,
+            detail="Embedding model 'nomic-embed-text' not installed."
+        )
+    
+    # 2. Process, chunk, embed, and store
+    await process_and_store_document(db, id, file)
+    return {"message": "Document processed and stored successfully."}

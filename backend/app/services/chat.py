@@ -26,6 +26,14 @@ def to_message_dto(m: models.Message) -> schemas.MessageDto:
         createdAt=m.created_at.isoformat() + "Z"
     )
 
+def to_document_dto(d: models.Document) -> schemas.DocumentDto:
+    return schemas.DocumentDto(
+        id=d.id,
+        chatId=d.chat_id,
+        filename=d.filename,
+        createdAt=d.created_at.isoformat() + "Z"
+    )
+
 def to_chat_dto(c: models.Chat) -> schemas.ChatDto:
     return schemas.ChatDto(
         id=c.id,
@@ -69,10 +77,12 @@ async def detail(db: AsyncSession, chat_id: str, user_id: str) -> schemas.ChatDe
             detail="Chat not found."
         )
     messages = [to_message_dto(m) for m in chat.messages]
+    documents = [to_document_dto(d) for d in (chat.documents or [])]
     chat_dto = to_chat_dto(chat)
     return schemas.ChatDetailDto(
         **chat_dto.model_dump(),
-        messages=messages
+        messages=messages,
+        documents=documents
     )
 
 async def update(db: AsyncSession, chat_id: str, user_id: str, input_data: schemas.UpdateChatInput) -> schemas.ChatDto:
@@ -143,6 +153,19 @@ async def send_message(db: AsyncSession, chat_id: str, user_id: str, input_data:
             "role": m.role.value.lower(),
             "content": m.content
         })
+        
+    # Check for relevant document chunks (RAG)
+    from app.services.rag import query_relevant_chunks
+    try:
+        relevant_chunks = await query_relevant_chunks(db, chat.id, input_data.content)
+        if relevant_chunks:
+            context_text = "\n\n".join(relevant_chunks)
+            rag_prompt = f"Use the following provided document context to answer the user's query.\n\n<context>\n{context_text}\n</context>\n\nQuery: {input_data.content}"
+            # Overwrite the last user's message in the payload
+            if messages_payload and messages_payload[-1]["role"] == "user":
+                messages_payload[-1]["content"] = rag_prompt
+    except Exception as e:
+        logger.warning(f"Failed to query RAG chunks: {e}")
         
     # Start the stream in the background
     asyncio.create_task(run_stream(

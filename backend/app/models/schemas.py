@@ -90,6 +90,7 @@ class ServerDto(BaseModel):
     version: Optional[str] = None
     lastSeenAt: Optional[str] = None
     createdAt: str
+    models: list[dict] = Field(default_factory=list)
 
 class ModelDto(BaseModel):
     id: str
@@ -112,6 +113,12 @@ class MessageDto(BaseModel):
     durationMs: Optional[int] = None
     createdAt: str
 
+class DocumentDto(BaseModel):
+    id: str
+    chatId: str
+    filename: str
+    createdAt: str
+
 class ChatDto(BaseModel):
     id: str
     title: str
@@ -122,3 +129,4 @@ class ChatDto(BaseModel):
 
 class ChatDetailDto(ChatDto):
     messages: List[MessageDto]
+    documents: List[DocumentDto] = Field(default_factory=list)

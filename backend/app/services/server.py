@@ -9,6 +9,21 @@ from app.providers.base import ProviderConnectInfo
 from app.lib.crypto import seal, open_secret
 
 def to_dto(server: models.Server) -> schemas.ServerDto:
+    # Safely load models if they were joined
+    models_data = []
+    try:
+        if server.models:
+            for m in server.models:
+                models_data.append({
+                    "id": m.id,
+                    "name": m.name,
+                    "sizeBytes": m.size_bytes,
+                    "family": m.family,
+                    "parameters": m.parameters
+                })
+    except Exception:
+        pass
+
     return schemas.ServerDto(
         id=server.id,
         name=server.name,
@@ -18,7 +33,8 @@ def to_dto(server: models.Server) -> schemas.ServerDto:
         status=server.status.value,
         version=server.version,
         lastSeenAt=server.last_seen_at.isoformat() + "Z" if server.last_seen_at else None,
-        createdAt=server.created_at.isoformat() + "Z"
+        createdAt=server.created_at.isoformat() + "Z",
+        models=models_data
     )
 
 def decrypt_api_key(server: models.Server) -> str | None:
@@ -76,6 +92,15 @@ async def create(db: AsyncSession, user_id: str, input_data: schemas.CreateServe
             version=ping.version,
             last_seen_at=datetime.datetime.utcnow() if ping.ok else None
         )
+        
+        if ping.ok:
+            try:
+                models_info = await adapter.list_models(conn_info)
+                models_data = [m.__dict__ for m in models_info]
+                await crud.sync_models_for_server(db, server.id, models_data)
+            except Exception as e:
+                pass
+
         return to_dto(server)
     except IntegrityError:
         await db.rollback()

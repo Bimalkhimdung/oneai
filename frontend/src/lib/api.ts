@@ -23,7 +23,9 @@ export async function api<T>(
   init: RequestInit & { auth?: boolean } = {},
 ): Promise<T> {
   const headers = new Headers(init.headers);
-  headers.set('content-type', 'application/json');
+  if (!(init.body instanceof FormData)) {
+    headers.set('content-type', 'application/json');
+  }
   if (init.auth !== false && accessToken) {
     headers.set('authorization', `Bearer ${accessToken}`);
   }

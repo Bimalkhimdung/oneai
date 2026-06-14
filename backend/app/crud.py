@@ -72,7 +72,7 @@ async def create_server(db: AsyncSession, user_id: str, **kwargs) -> models.Serv
     return server
 
 async def list_servers_for_user(db: AsyncSession, user_id: str) -> list[models.Server]:
-    stmt = select(models.Server).where(models.Server.user_id == user_id).order_by(models.Server.created_at.desc())
+    stmt = select(models.Server).where(models.Server.user_id == user_id).options(selectinload(models.Server.models)).order_by(models.Server.created_at.desc())
     result = await db.execute(stmt)
     return list(result.scalars().all())
 
@@ -96,6 +96,26 @@ async def update_server_status(db: AsyncSession, server_id: str, status: models.
     await db.commit()
 
 
+# Model CRUD
+async def sync_models_for_server(db: AsyncSession, server_id: str, models_info: list[dict]):
+    # Delete existing models for this server to keep it in sync
+    stmt = delete(models.Model).where(models.Model.server_id == server_id)
+    await db.execute(stmt)
+    
+    # Insert new ones
+    for m in models_info:
+        model = models.Model(
+            server_id=server_id,
+            name=m.get("name"),
+            family=m.get("family"),
+            size_bytes=m.get("sizeBytes") or 0,
+            digest=m.get("digest") or "unknown",
+            parameters=m.get("parameters")
+        )
+        db.add(model)
+        
+    await db.commit()
+
 # Chat CRUD
 async def create_chat(db: AsyncSession, user_id: str, model_id: str, title: str = "New chat") -> models.Chat:
     chat = models.Chat(
@@ -112,7 +132,7 @@ async def get_chat_by_id_and_user_id(db: AsyncSession, chat_id: str, user_id: st
     stmt = select(models.Chat).where(
         models.Chat.id == chat_id,
         models.Chat.user_id == user_id
-    ).options(selectinload(models.Chat.messages))
+    ).options(selectinload(models.Chat.messages), selectinload(models.Chat.documents))
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 

@@ -149,3 +149,13 @@ class OllamaAdapter(BaseProviderAdapter):
             res = await client.request("DELETE", url, headers=self._headers(info), json=payload)
             if res.status_code >= 400 and res.status_code != 404:
                 raise Exception(f"Ollama delete HTTP {res.status_code}")
+
+    async def embed(self, info: ProviderConnectInfo, model: str, prompt: str) -> list[float]:
+        url = f"{self._base_url(info)}/api/embeddings"
+        payload = {"model": model, "prompt": prompt}
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            res = await client.post(url, headers=self._headers(info), json=payload)
+            if res.status_code >= 400:
+                raise Exception(f"Ollama embed HTTP {res.status_code}: {res.text}")
+            body = res.json()
+            return body.get("embedding", [])
