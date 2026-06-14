@@ -21,7 +21,6 @@ const items = [
   { href: '/servers', label: 'AI Servers', icon: Server },
   { href: '/models', label: 'Models', icon: Boxes },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
-  { href: '/compare', label: 'Compare', icon: GitCompare },
   { 
     href: '/settings', 
     label: 'Settings', 

@@ -8,9 +8,11 @@ import { useServers } from '@/queries/servers';
 import { api, ApiClientError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Bot, Send, Loader2, Plus } from 'lucide-react';
+import { Bot, Send, Loader2, Plus, Mic } from 'lucide-react';
 import { toast } from 'sonner';
 import { MissingModelAlert } from '@/components/chat/MissingModelAlert';
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
+import { cn } from '@/lib/utils';
 
 export default function ChatIndexPage() {
   useSocket();
@@ -24,6 +26,11 @@ export default function ChatIndexPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [showMissingModel, setShowMissingModel] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSpeechResult = (text: string) => {
+    setDraft(prev => prev + text);
+  };
+  const { isListening, toggleListening, supported: speechSupported } = useSpeechRecognition(handleSpeechResult);
 
   const availableModels = servers?.flatMap((s) => s.models || []) || [];
 
@@ -48,7 +55,6 @@ export default function ChatIndexPage() {
     }
 
     setIsUploading(true);
-    toast.loading(`Processing ${file.name}...`, { id: "upload" });
     try {
       const chat = await createChat.mutateAsync({
         modelId: selectedModel,
@@ -62,10 +68,8 @@ export default function ChatIndexPage() {
         body: formData,
       });
       
-      toast.success(`Successfully attached ${file.name}`, { id: "upload" });
       router.push(`/chat/${chat.id}`);
     } catch (err: any) {
-      toast.dismiss("upload");
       if (err instanceof ApiClientError && err.status === 422) {
         setShowMissingModel(true);
       } else {
@@ -116,7 +120,7 @@ export default function ChatIndexPage() {
 
         {availableModels.length > 0 ? (
           <form onSubmit={handleStartChat} className="w-full flex flex-col gap-4">
-            <div className="relative flex items-center group shadow-sm w-full">
+            <div className="relative flex items-center group w-full rounded-[1px] bg-transparent border border-border/50 transition-all duration-300 focus-within:border-primary/50 focus-within:shadow-[0_0_20px_rgba(255,255,255,0.05)] dark:focus-within:shadow-[0_0_20px_rgba(255,255,255,0.05)]">
               <input 
                 type="file" 
                 ref={fileInputRef} 
@@ -139,20 +143,39 @@ export default function ChatIndexPage() {
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder="Message local AI..."
-                className="rounded-[1px] h-14 pl-14 pr-14 bg-transparent border-border/50 focus-visible:ring-primary/30 text-base shadow-sm"
+                className="rounded-[1px] h-14 pl-14 pr-24 bg-transparent border-0 focus-visible:ring-0 text-base shadow-none"
                 disabled={isStarting || isUploading}
                 autoFocus
               />
-              <Button 
-                type="submit" 
-                disabled={!draft.trim() || !selectedModel || isStarting || isUploading}
-                className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 p-0 rounded-[1px] hover:bg-primary shadow-md transition-all"
-              >
-                {isStarting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              </Button>
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 z-10">
+                {speechSupported && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={toggleListening}
+                    disabled={isStarting || isUploading}
+                    className={cn(
+                      "h-10 w-10 rounded-full transition-all duration-300",
+                      isListening 
+                        ? "text-red-500 bg-red-500/10 hover:bg-red-500/20 animate-pulse" 
+                        : "text-muted-foreground hover:text-foreground hover:bg-card/50"
+                    )}
+                  >
+                    <Mic className="w-4 h-4" />
+                  </Button>
+                )}
+                <Button 
+                  type="submit" 
+                  disabled={!draft.trim() || !selectedModel || isStarting || isUploading}
+                  className="h-10 w-10 p-0 rounded-[1px] hover:bg-primary shadow-md transition-all"
+                >
+                  {isStarting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                </Button>
+              </div>
             </div>
 
-            <div className="flex items-center justify-center gap-2 mt-2">
+            <div className="flex items-center justify-start gap-2 mt-2 pl-2">
               <span className="text-xs text-muted-foreground">Using model:</span>
               <select 
                 value={selectedModel}

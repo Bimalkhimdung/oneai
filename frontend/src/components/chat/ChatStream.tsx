@@ -14,6 +14,7 @@ import { Plus, Send, Loader2, FileText, X, Mic, ArrowUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { MissingModelAlert } from './MissingModelAlert';
 import { ApiClientError } from '@/lib/api';
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 
 interface Props {
   chatId: string;
@@ -24,12 +25,18 @@ interface Props {
 export function ChatStream({ chatId, initialMessages, initialDocuments }: Props) {
   const [messages, setMessages] = useState<MessageDto[]>(initialMessages);
   const [documents, setDocuments] = useState<DocumentDto[]>(initialDocuments);
+  const [uploadingDocIds, setUploadingDocIds] = useState<string[]>([]);
   const [draft, setDraft] = useState('');
   const send = useSendMessage(chatId);
   const uploadDoc = useUploadDocument(chatId);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showMissingModel, setShowMissingModel] = useState(false);
+
+  const handleSpeechResult = (text: string) => {
+    setDraft(prev => prev + text);
+  };
+  const { isListening, toggleListening, supported: speechSupported } = useSpeechRecognition(handleSpeechResult);
 
   useEffect(() => {
     setMessages(initialMessages);
@@ -105,21 +112,22 @@ export function ChatStream({ chatId, initialMessages, initialDocuments }: Props)
       return;
     }
 
+    const fakeId = Math.random().toString(36).substring(7);
     const newDoc: DocumentDto = {
-      id: Math.random().toString(36).substring(7),
+      id: fakeId,
       chatId: chatId,
       filename: file.name,
       createdAt: new Date().toISOString()
     };
     setDocuments(prev => [...prev, newDoc]);
+    setUploadingDocIds(prev => [...prev, fakeId]);
 
     try {
-      toast.loading(`Processing ${file.name}...`, { id: "upload" });
       await uploadDoc.mutateAsync(file);
-      toast.success(`Successfully uploaded and processed ${file.name}`, { id: "upload" });
+      setUploadingDocIds(prev => prev.filter(id => id !== fakeId));
     } catch (err: any) {
-      setDocuments(prev => prev.filter(d => d.id !== newDoc.id));
-      toast.dismiss("upload");
+      setDocuments(prev => prev.filter(d => d.id !== fakeId));
+      setUploadingDocIds(prev => prev.filter(id => id !== fakeId));
       if (err instanceof ApiClientError && err.status === 422) {
         setShowMissingModel(true);
       } else {
@@ -243,18 +251,22 @@ export function ChatStream({ chatId, initialMessages, initialDocuments }: Props)
         })}
       </div>
       <form onSubmit={onSubmit} className="p-4 bg-background">
-        <div className="max-w-4xl mx-auto flex flex-col gap-2 rounded-[28px] border border-border/50 bg-card px-3 py-3 shadow-sm">
+        <div className="max-w-4xl mx-auto flex flex-col gap-2 rounded-[28px] border border-border/50 bg-card px-3 py-3 shadow-sm transition-all duration-300 focus-within:border-primary/50 focus-within:shadow-[0_0_20px_rgba(255,255,255,0.05)] dark:focus-within:shadow-[0_0_20px_rgba(255,255,255,0.05)]">
           {pendingDocs.length > 0 && (
             <div className="flex flex-wrap gap-2 px-2 pt-1">
               {pendingDocs.map((doc) => {
                 const ext = doc.filename.split('.').pop()?.toUpperCase() || 'FILE';
+                const isUploading = uploadingDocIds.includes(doc.id);
                 return (
                   <div 
                     key={doc.id} 
                     className="relative flex items-center gap-3 rounded-[20px] border border-border/50 bg-background p-1.5 pr-4 shadow-sm w-64 max-w-full"
                   >
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[12px] bg-red-500 text-white">
-                      <FileText className="h-5 w-5" />
+                    <div className={cn(
+                      "flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[12px] text-white transition-colors duration-300",
+                      isUploading ? "bg-muted-foreground/40" : "bg-red-500"
+                    )}>
+                      {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />}
                     </div>
                     <div className="flex flex-col overflow-hidden">
                       <span className="truncate text-sm font-semibold text-foreground leading-tight">{doc.filename}</span>
@@ -262,6 +274,11 @@ export function ChatStream({ chatId, initialMessages, initialDocuments }: Props)
                     </div>
                     <button 
                       type="button"
+                      onClick={() => {
+                        // Optimistic removal (doesn't abort backend if already sent, but removes from UI)
+                        setDocuments(prev => prev.filter(d => d.id !== doc.id));
+                        setUploadingDocIds(prev => prev.filter(id => id !== doc.id));
+                      }}
                       className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black text-white hover:bg-gray-800"
                     >
                       <X className="h-3 w-3" />
@@ -298,17 +315,25 @@ export function ChatStream({ chatId, initialMessages, initialDocuments }: Props)
               className="flex-1 border-0 h-12 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-[15px]"
             />
             <div className="flex items-center gap-2 pr-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-10 w-10 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-full"
-              >
-                <Mic className="w-5 h-5" />
-              </Button>
+              {speechSupported && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleListening}
+                  className={cn(
+                    "h-10 w-10 rounded-full transition-all duration-300",
+                    isListening 
+                      ? "text-red-500 bg-red-500/10 hover:bg-red-500/20 animate-pulse" 
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  )}
+                >
+                  <Mic className="w-5 h-5" />
+                </Button>
+              )}
               <Button 
                 type="submit" 
-                disabled={send.isPending || !draft.trim()}
+                disabled={send.isPending || !draft.trim() || uploadingDocIds.length > 0}
                 className="h-10 w-10 rounded-full bg-black hover:bg-gray-800 text-white transition-all disabled:opacity-50"
               >
                 {send.isPending ? <Loader2 className="w-5 h-5 animate-spin text-white" /> : <ArrowUp className="w-5 h-5 text-white" />}

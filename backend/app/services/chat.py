@@ -122,6 +122,8 @@ async def send_message(db: AsyncSession, chat_id: str, user_id: str, input_data:
         
     model = await load_model_and_server(db, chat.model_id, user_id)
     
+    logger.info(f"Received query for chat {chat.id}: {input_data.content}")
+    
     user_message = await crud.create_message(
         db,
         chat_id=chat.id,
@@ -154,18 +156,45 @@ async def send_message(db: AsyncSession, chat_id: str, user_id: str, input_data:
             "content": m.content
         })
         
+    # Check for Web Search
+    web_context = ""
+    if input_data.web_search:
+        from app.services.search import search_web
+        try:
+            web_context = await search_web(input_data.content)
+        except Exception as e:
+            logger.warning(f"Failed to perform web search: {e}")
+
     # Check for relevant document chunks (RAG)
     from app.services.rag import query_relevant_chunks
+    relevant_chunks = []
     try:
         relevant_chunks = await query_relevant_chunks(db, chat.id, input_data.content)
-        if relevant_chunks:
-            context_text = "\n\n".join(relevant_chunks)
-            rag_prompt = f"Use the following provided document context to answer the user's query.\n\n<context>\n{context_text}\n</context>\n\nQuery: {input_data.content}"
-            # Overwrite the last user's message in the payload
-            if messages_payload and messages_payload[-1]["role"] == "user":
-                messages_payload[-1]["content"] = rag_prompt
     except Exception as e:
         logger.warning(f"Failed to query RAG chunks: {e}")
+
+    # Build prompt context
+    if web_context or relevant_chunks:
+        context_parts = []
+        if relevant_chunks:
+            context_parts.append("--- DOCUMENT CONTEXT ---\n" + "\n\n".join(relevant_chunks))
+        if web_context:
+            context_parts.append(f"--- WEB SEARCH RESULTS ---\n{web_context}")
+            
+        context_text = "\n\n".join(context_parts)
+        today = datetime.date.today().isoformat()
+        rag_prompt = (
+            f"Use the following context (documents/web search results) to answer the user's query.\n"
+            f"The current date is {today}. For questions about current office holders, status, prices, news, "
+            f"or other time-sensitive facts, prioritize the most recent reliable sources and ignore older "
+            f"sources when they conflict.\n"
+            f"Provide a detailed response based on the context. Cite the source URL if using web results.\n\n"
+            f"<context>\n{context_text}\n</context>\n\n"
+            f"Query: {input_data.content}"
+        )
+        # Overwrite the last user's message in the payload
+        if messages_payload and messages_payload[-1]["role"] == "user":
+            messages_payload[-1]["content"] = rag_prompt
         
     # Start the stream in the background
     asyncio.create_task(run_stream(
@@ -245,8 +274,9 @@ async def run_stream(
                 tokens_out=totals.get("tokensOut"),
                 duration_ms=totals.get("durationMs")
             )
-            # update chat's updated_at
             await crud.update_chat(db, chat_id, updated_at=datetime.datetime.utcnow())
+            
+            logger.info(f"Completed response for chat {chat_id}: {assembled}")
             
     except Exception as e:
         logger.error(f"Chat stream failed: {e}", exc_info=True)

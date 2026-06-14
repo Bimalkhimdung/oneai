@@ -40,40 +40,12 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
-      {/* Hero Section */}
-      <div className="relative overflow-hidden rounded-[1px] bg-gradient-to-br from-primary/10 via-card to-background border border-border/40 p-8 shadow-lg">
-        <div className="absolute top-0 right-0 p-12 opacity-[0.03] pointer-events-none">
-          <Sparkles className="w-64 h-64 text-primary" />
-        </div>
-        <div className="relative z-10 max-w-2xl space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium border border-primary/20 mb-2">
-            <Activity className="w-3.5 h-3.5" />
-            System Online
-          </div>
-          <h1 className="text-4xl font-bold tracking-tight text-foreground">
-            Command Center
-          </h1>
-          <p className="text-muted-foreground text-lg leading-relaxed">
-            Welcome to your local AI hub. Monitor your inference engines, manage model weights, and dive back into your recent conversations.
-          </p>
-          <div className="pt-4 flex gap-4">
-            <Link href="/settings/ollama/models" className="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-10 px-6 py-2 rounded-[1px] gap-2">
-              <Database className="w-4 h-4" />
-              Download Models
-            </Link>
-            <Link href="/chat" className="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-10 px-6 py-2 rounded-[1px] gap-2">
-              <MessageSquare className="w-4 h-4" />
-              New Chat
-            </Link>
-          </div>
-        </div>
-      </div>
 
       {/* Stats Grid */}
       <div className="grid gap-6 md:grid-cols-3">
         {/* Servers Card */}
         <Link href="/servers">
-          <Card className="rounded-[1px] bg-card/40 backdrop-blur-sm border-border/50 hover:border-primary/50 transition-all duration-300 group overflow-hidden relative h-full cursor-pointer">
+          <Card className="rounded-[4px] bg-card/80 backdrop-blur-md border border-border/80 shadow-sm hover:shadow-md hover:border-primary/60 transition-all duration-300 group overflow-hidden relative h-full cursor-pointer">
             <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Active Servers</CardTitle>
@@ -92,7 +64,7 @@ export default function DashboardPage() {
 
         {/* Models Card */}
         <Link href="/settings/ollama/models">
-          <Card className="rounded-[1px] bg-card/40 backdrop-blur-sm border-border/50 hover:border-blue-500/50 transition-all duration-300 group overflow-hidden relative h-full cursor-pointer">
+          <Card className="rounded-[4px] bg-card/80 backdrop-blur-md border border-border/80 shadow-sm hover:shadow-md hover:border-blue-500/60 transition-all duration-300 group overflow-hidden relative h-full cursor-pointer">
             <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Installed Models</CardTitle>
@@ -111,7 +83,7 @@ export default function DashboardPage() {
 
         {/* Chats Card */}
         <Link href="/chat">
-          <Card className="rounded-[1px] bg-card/40 backdrop-blur-sm border-border/50 hover:border-purple-500/50 transition-all duration-300 group overflow-hidden relative h-full cursor-pointer">
+          <Card className="rounded-[4px] bg-card/80 backdrop-blur-md border border-border/80 shadow-sm hover:shadow-md hover:border-purple-500/60 transition-all duration-300 group overflow-hidden relative h-full cursor-pointer">
             <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Conversations</CardTitle>
@@ -131,7 +103,7 @@ export default function DashboardPage() {
 
       {/* Additional layout section */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="col-span-4 rounded-[1px] bg-card/30 border-border/50 overflow-hidden">
+        <Card className="col-span-4 rounded-[4px] bg-card/80 border border-border/80 shadow-sm overflow-hidden">
           <CardHeader>
             <CardTitle className="text-lg">System Utilization</CardTitle>
             <CardDescription>
@@ -146,7 +118,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="col-span-3 rounded-[1px] bg-card/30 border-border/50">
+        <Card className="col-span-3 rounded-[4px] bg-card/80 border border-border/80 shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg">Recent Activity</CardTitle>
             <CardDescription>

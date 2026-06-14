@@ -57,6 +57,7 @@ class CreateChatInput(BaseModel):
 
 class SendMessageInput(BaseModel):
     content: str = Field(..., min_length=1, max_length=64000)
+    web_search: bool = False
 
 class UpdateChatInput(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=120)

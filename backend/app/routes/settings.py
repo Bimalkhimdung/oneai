@@ -84,9 +84,7 @@ async def start_installation(
     return res
 
 @router.get("/system-specs", response_model=SystemSpecsResponse)
-async def get_system_specs(
-    current_user: dict = Depends(dependencies.require_auth)
-):
+async def get_system_specs():
     try:
         # Get CPU brand/model name
         brand = "Unknown CPU"
