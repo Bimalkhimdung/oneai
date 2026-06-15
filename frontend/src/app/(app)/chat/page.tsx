@@ -146,7 +146,7 @@ export default function ChatIndexPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 h-full animate-in fade-in zoom-in-95 duration-500">
+    <div className="flex-1 flex flex-col items-center justify-start p-6 pt-[12vh] h-full animate-in fade-in zoom-in-95 duration-500">
       <div className="w-full max-w-2xl flex flex-col items-center">
         <div className="w-16 h-16 bg-card border border-border/50 rounded-[1px] flex items-center justify-center mb-8 shadow-sm relative">
           <div className="absolute inset-0 bg-primary/5 rounded-[1px] blur-xl" />

@@ -136,6 +136,21 @@ export interface CompareInput {
   modelIds: string[];
 }
 
+export interface CompareResultDto {
+  modelId: string;
+  modelName: string;
+  content: string;
+  tokensIn: number | null;
+  tokensOut: number | null;
+  durationMs: number | null;
+  error?: string | null;
+}
+
+export interface CompareResponseDto {
+  prompt: string;
+  results: CompareResultDto[];
+}
+
 export type McpTransport = 'STDIO' | 'SSE';
 
 export interface McpServerDto {

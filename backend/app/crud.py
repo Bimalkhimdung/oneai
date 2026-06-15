@@ -98,22 +98,43 @@ async def update_server_status(db: AsyncSession, server_id: str, status: models.
 
 # Model CRUD
 async def sync_models_for_server(db: AsyncSession, server_id: str, models_info: list[dict]):
-    # Delete existing models for this server to keep it in sync
-    stmt = delete(models.Model).where(models.Model.server_id == server_id)
-    await db.execute(stmt)
-    
-    # Insert new ones
+    existing_result = await db.execute(
+        select(models.Model).where(models.Model.server_id == server_id)
+    )
+    existing_by_name = {model.name: model for model in existing_result.scalars().all()}
+    seen_names = set()
+
     for m in models_info:
-        model = models.Model(
-            server_id=server_id,
-            name=m.get("name"),
-            family=m.get("family"),
-            size_bytes=m.get("sizeBytes") or 0,
-            digest=m.get("digest") or "unknown",
-            parameters=m.get("parameters")
+        name = m.get("name")
+        if not name:
+            continue
+
+        seen_names.add(name)
+        existing = existing_by_name.get(name)
+        if existing:
+            existing.family = m.get("family")
+            existing.size_bytes = m.get("sizeBytes") or 0
+            existing.digest = m.get("digest") or "unknown"
+            existing.parameters = m.get("parameters")
+        else:
+            db.add(models.Model(
+                server_id=server_id,
+                name=name,
+                family=m.get("family"),
+                size_bytes=m.get("sizeBytes") or 0,
+                digest=m.get("digest") or "unknown",
+                parameters=m.get("parameters")
+            ))
+
+    stale_names = set(existing_by_name) - seen_names
+    if stale_names:
+        await db.execute(
+            delete(models.Model).where(
+                models.Model.server_id == server_id,
+                models.Model.name.in_(stale_names),
+            )
         )
-        db.add(model)
-        
+
     await db.commit()
 
 # Chat CRUD

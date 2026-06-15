@@ -7,9 +7,12 @@ import re
 import json
 import concurrent.futures
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
-from app import dependencies
+from app import dependencies, models
+from app.models import database
 from app.services import installer
+from app.services import server as server_service
 
 router = APIRouter(prefix="/settings")
 
@@ -59,10 +62,20 @@ def _fetch_registry_size(model_id: str) -> tuple[str, str]:
 
 @router.get("/installations")
 async def get_installations(
-    current_user: dict = Depends(dependencies.require_auth)
+    current_user: dict = Depends(dependencies.require_auth),
+    db: AsyncSession = Depends(database.get_db)
 ):
-    # Returns statuses of all providers
-    return installer.get_statuses()
+    statuses = installer.get_statuses()
+    try:
+        has_installed_ollama_model = any(
+            key.startswith("OLLAMA_MODEL_") and info.get("status") in ("installed", "completed")
+            for key, info in statuses.items()
+        )
+        if has_installed_ollama_model:
+            await server_service.sync_user_servers_for_provider(db, current_user["id"], models.Provider.OLLAMA)
+    except Exception:
+        pass
+    return statuses
 
 @router.post("/install")
 async def start_installation(
@@ -245,7 +258,8 @@ async def pull_ollama_model(
 @router.post("/ollama/delete")
 async def delete_ollama_model(
     req: PullModelRequest,
-    current_user: dict = Depends(dependencies.require_auth)
+    current_user: dict = Depends(dependencies.require_auth),
+    db: AsyncSession = Depends(database.get_db)
 ):
     res = installer.delete_model(req.model_name)
     if not res.get("ok", True):
@@ -253,4 +267,8 @@ async def delete_ollama_model(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=res.get("message", "Failed to delete model")
         )
+    try:
+        await server_service.sync_user_servers_for_provider(db, current_user["id"], models.Provider.OLLAMA)
+    except Exception:
+        pass
     return res

@@ -105,6 +105,21 @@ class CompareInput(BaseModel):
     modelIds: List[str] = Field(..., min_length=2, max_length=5)
 
 
+class CompareResultDto(BaseModel):
+    modelId: str
+    modelName: str
+    content: str
+    tokensIn: Optional[int] = None
+    tokensOut: Optional[int] = None
+    durationMs: Optional[int] = None
+    error: Optional[str] = None
+
+
+class CompareResponseDto(BaseModel):
+    prompt: str
+    results: List[CompareResultDto]
+
+
 # Outgoing Response DTO Schemas
 class UserDto(BaseModel):
     id: str

@@ -11,6 +11,7 @@ import { Download, CheckCircle2, RefreshCw, Search, Database, ArrowLeft, Trash2 
 import { toast } from 'sonner';
 import { Progress } from '@/components/ui/progress';
 import Link from 'next/link';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface ProviderInstallInfo {
   status: 'idle' | 'installing' | 'completed' | 'installed' | 'failed';
@@ -32,6 +33,7 @@ interface OllamaModel {
 
 export default function OllamaModelsPage() {
   const user = useAuthStore((s) => s.user);
+  const queryClient = useQueryClient();
   const [installations, setInstallations] = useState<InstallationsResponse | null>(null);
   const [activeLogsProvider, setActiveLogsProvider] = useState<string | null>(null);
   const logsEndRef = useRef<HTMLDivElement | null>(null);
@@ -163,6 +165,16 @@ export default function OllamaModelsPage() {
     ? sortedModels.filter(m => m.id === activelyPullingModelId)
     : sortedModels;
 
+  useEffect(() => {
+    if (!installations) return;
+    const hasSyncedModelChange = Object.entries(installations).some(([key, info]) => (
+      key.startsWith('OLLAMA_MODEL_') && (info.status === 'completed' || info.status === 'installed')
+    ));
+    if (hasSyncedModelChange) {
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
+    }
+  }, [installations, queryClient]);
+
   async function handlePullModel(modelId: string, variant?: string) {
     try {
       const finalModelName = variant ? `${modelId}:${variant}` : modelId;
@@ -199,6 +211,7 @@ export default function OllamaModelsPage() {
         next[providerKey] = { status: 'idle', logs: [], progress: 0 };
         return next;
       });
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
       toast.success(`Uninstalled model ${modelId}`);
     } catch (err: any) {
       toast.error(err?.message || `Failed to uninstall model ${modelId}`);

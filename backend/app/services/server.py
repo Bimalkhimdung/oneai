@@ -2,6 +2,7 @@ import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select
 from app import crud, models
 from app.models import schemas
 from app.providers.registry import get_adapter
@@ -95,9 +96,7 @@ async def create(db: AsyncSession, user_id: str, input_data: schemas.CreateServe
         
         if ping.ok:
             try:
-                models_info = await adapter.list_models(conn_info)
-                models_data = [m.__dict__ for m in models_info]
-                await crud.sync_models_for_server(db, server.id, models_data)
+                await sync_models_for_server(db, server)
             except Exception as e:
                 pass
 
@@ -149,6 +148,9 @@ async def health_check(db: AsyncSession, server_id: str, user_id: str) -> dict:
         version=ping.version,
         last_seen_at=datetime.datetime.utcnow() if ping.ok else server.last_seen_at
     )
+
+    if ping.ok:
+        await sync_models_for_server(db, server)
     
     return {
         "ok": ping.ok,
@@ -156,3 +158,34 @@ async def health_check(db: AsyncSession, server_id: str, user_id: str) -> dict:
         "error": ping.error,
         "latencyMs": ping.latencyMs
     }
+
+
+async def sync_models_for_server(db: AsyncSession, server: models.Server) -> None:
+    adapter = get_adapter(server.provider.value)
+    api_key = decrypt_api_key(server)
+    conn_info = ProviderConnectInfo(
+        host=server.host,
+        port=server.port,
+        apiKey=api_key
+    )
+    models_info = await adapter.list_models(conn_info)
+    await crud.sync_models_for_server(db, server.id, [m.__dict__ for m in models_info])
+
+
+async def sync_user_servers_for_provider(db: AsyncSession, user_id: str, provider: models.Provider) -> int:
+    stmt = select(models.Server).where(
+        models.Server.user_id == user_id,
+        models.Server.provider == provider,
+    )
+    result = await db.execute(stmt)
+    servers = list(result.scalars().all())
+    synced = 0
+
+    for server in servers:
+        try:
+            await sync_models_for_server(db, server)
+            synced += 1
+        except Exception:
+            continue
+
+    return synced

@@ -281,8 +281,9 @@ export function ChatStream({ chatId, initialMessages, initialDocuments }: Props)
           );
         })}
       </div>
-      <form onSubmit={onSubmit} className="p-4 bg-background">
-        <div className="max-w-4xl mx-auto flex flex-col gap-2 rounded-[28px] border border-border/50 bg-card px-3 py-3 shadow-sm transition-all duration-300 focus-within:border-primary/50 focus-within:shadow-[0_0_20px_rgba(255,255,255,0.05)] dark:focus-within:shadow-[0_0_20px_rgba(255,255,255,0.05)]">
+      <form onSubmit={onSubmit} className="px-4 pt-3 pb-8 bg-background/95">
+        <div className="chat-composer-glow max-w-4xl mx-auto relative rounded-[28px] p-[1px] overflow-hidden shadow-sm transition-all duration-300">
+          <div className="relative z-10 flex flex-col gap-2 rounded-[28px] bg-card px-3 py-3">
           {pendingDocs.length > 0 && (
             <div className="flex flex-wrap gap-2 px-2 pt-1">
               {pendingDocs.map((doc) => {
@@ -458,6 +459,7 @@ export function ChatStream({ chatId, initialMessages, initialDocuments }: Props)
                 {send.isPending ? <Loader2 className="w-5 h-5 animate-spin text-white" /> : <ArrowUp className="w-5 h-5 text-white" />}
               </Button>
             </div>
+          </div>
           </div>
         </div>
       </form>
