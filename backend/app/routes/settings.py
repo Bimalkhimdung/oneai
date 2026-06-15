@@ -9,7 +9,7 @@ import concurrent.futures
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
-from app import dependencies, models
+from app import dependencies, crud, models
 from app.models import database
 from app.services import installer
 from app.services import server as server_service
@@ -60,21 +60,60 @@ def _fetch_registry_size(model_id: str) -> tuple[str, str]:
         pass
     return model_id, ""
 
+def _set_installed_status(statuses: dict, key: str):
+    existing = statuses.get(key)
+    if existing and existing.get("status") == "installing":
+        return
+    statuses[key] = {
+        "status": "installed",
+        "logs": existing.get("logs", []) if existing else [],
+        "progress": 100,
+    }
+
+def _ollama_model_status_keys(model_name: str) -> set[str]:
+    normalized = model_name.replace(":latest", "")
+    keys = {f"OLLAMA_MODEL_{normalized}"}
+    if ":" in normalized:
+        keys.add(f"OLLAMA_MODEL_{normalized.split(':', 1)[0]}")
+    return keys
+
+async def _sync_installed_ollama_statuses(statuses: dict, db: AsyncSession, user_id: str):
+    try:
+        await server_service.sync_user_servers_for_provider(db, user_id, models.Provider.OLLAMA)
+    except Exception:
+        pass
+
+    try:
+        servers = await crud.list_servers_for_user(db, user_id)
+    except Exception:
+        return
+
+    ollama_servers = [server for server in servers if server.provider == models.Provider.OLLAMA]
+    if not ollama_servers:
+        return
+
+    has_ollama_server = any(
+        server.status == models.ServerStatus.ONLINE or server.models
+        for server in ollama_servers
+    )
+    if has_ollama_server:
+        _set_installed_status(statuses, "OLLAMA")
+
+    for server in ollama_servers:
+        for model in server.models:
+            for key in _ollama_model_status_keys(model.name):
+                _set_installed_status(statuses, key)
+
 @router.get("/installations")
 async def get_installations(
     current_user: dict = Depends(dependencies.require_auth),
     db: AsyncSession = Depends(database.get_db)
 ):
-    statuses = installer.get_statuses()
-    try:
-        has_installed_ollama_model = any(
-            key.startswith("OLLAMA_MODEL_") and info.get("status") in ("installed", "completed")
-            for key, info in statuses.items()
-        )
-        if has_installed_ollama_model:
-            await server_service.sync_user_servers_for_provider(db, current_user["id"], models.Provider.OLLAMA)
-    except Exception:
-        pass
+    statuses = {
+        key: {**info}
+        for key, info in installer.get_statuses().items()
+    }
+    await _sync_installed_ollama_statuses(statuses, db, current_user["id"])
     return statuses
 
 @router.post("/install")
