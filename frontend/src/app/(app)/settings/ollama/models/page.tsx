@@ -29,7 +29,46 @@ interface OllamaModel {
   description: string;
   tags?: string[];
   size?: string;
+  installedOnly?: boolean;
 }
+
+const isDoneStatus = (status?: ProviderInstallInfo['status']) => status === 'installed' || status === 'completed';
+
+const getModelStatus = (installations: InstallationsResponse | null, modelId: string) => {
+  if (!installations) return undefined;
+
+  const exact = installations[`OLLAMA_MODEL_${modelId}`]?.status;
+  if (exact) return exact;
+
+  const taggedMatch = Object.entries(installations).find(([key]) => (
+    key.startsWith(`OLLAMA_MODEL_${modelId}:`)
+  ));
+  return taggedMatch?.[1].status;
+};
+
+const getModelInfo = (installations: InstallationsResponse | null, modelId: string): ProviderInstallInfo => {
+  if (!installations) return { status: 'idle', logs: [], progress: 0 };
+
+  const exact = installations[`OLLAMA_MODEL_${modelId}`];
+  if (exact) return exact;
+
+  const taggedMatch = Object.entries(installations).find(([key]) => (
+    key.startsWith(`OLLAMA_MODEL_${modelId}:`)
+  ));
+  return taggedMatch?.[1] || { status: 'idle', logs: [], progress: 0 };
+};
+
+const getInstalledModelIds = (installations: InstallationsResponse | null) => {
+  if (!installations) return [];
+
+  const ids = Object.entries(installations)
+    .filter(([key, info]) => key.startsWith('OLLAMA_MODEL_') && isDoneStatus(info.status))
+    .map(([key]) => key.replace('OLLAMA_MODEL_', ''));
+
+  return ids.filter((id) => (
+    id.includes(':') || !ids.some((other) => other.startsWith(`${id}:`))
+  ));
+};
 
 export default function OllamaModelsPage() {
   const user = useAuthStore((s) => s.user);
@@ -139,17 +178,56 @@ export default function OllamaModelsPage() {
     return () => clearTimeout(delay);
   }, [searchQuery, page]);
 
+  const modelsWithInstalled = useMemo(() => {
+    const search = searchQuery.trim().toLowerCase();
+    const merged = [...models];
+
+    getInstalledModelIds(installations).forEach((id) => {
+      const matchesSearch = !search || id.toLowerCase().includes(search);
+      const existingIndex = merged.findIndex((model) => model.id === id);
+      const baseIndex = id.includes(':')
+        ? merged.findIndex((model) => model.id === id.split(':', 1)[0])
+        : -1;
+
+      if (!matchesSearch || existingIndex >= 0) return;
+
+      if (baseIndex >= 0) {
+        const baseModel = merged[baseIndex];
+        if (!baseModel) return;
+        merged[baseIndex] = {
+          ...baseModel,
+          id,
+          name: id,
+          description: baseModel.description || 'Installed locally on your Ollama server.',
+        };
+        return;
+      }
+
+      if (matchesSearch) {
+        merged.unshift({
+          id,
+          name: id,
+          description: 'Installed locally on your Ollama server.',
+          tags: ['installed'],
+          installedOnly: true,
+        });
+      }
+    });
+
+    return merged;
+  }, [models, installations, searchQuery]);
+
   const sortedModels = useMemo(() => {
-    return [...models].sort((a, b) => {
-      const aInfo = installations?.[`OLLAMA_MODEL_${a.id}`]?.status;
-      const bInfo = installations?.[`OLLAMA_MODEL_${b.id}`]?.status;
-      const aInstalled = aInfo === 'installed' || aInfo === 'completed';
-      const bInstalled = bInfo === 'installed' || bInfo === 'completed';
+    return [...modelsWithInstalled].sort((a, b) => {
+      const aInfo = getModelStatus(installations, a.id);
+      const bInfo = getModelStatus(installations, b.id);
+      const aInstalled = isDoneStatus(aInfo);
+      const bInstalled = isDoneStatus(bInfo);
       if (aInstalled && !bInstalled) return -1;
       if (!aInstalled && bInstalled) return 1;
       return 0;
     });
-  }, [models, installations]);
+  }, [modelsWithInstalled, installations]);
 
   const activelyPullingModelId = useMemo(() => {
     if (!installations) return null;
@@ -246,7 +324,7 @@ export default function OllamaModelsPage() {
       </div>
 
       <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        {isSearching && models.length === 0 ? (
+        {isSearching && modelsWithInstalled.length === 0 ? (
           <div className="flex justify-center p-12 text-muted-foreground animate-pulse border border-dashed border-border/40 rounded-2xl">
             <RefreshCw className="h-5 w-5 animate-spin mr-2" />
             Searching library...
@@ -255,9 +333,9 @@ export default function OllamaModelsPage() {
           <div className="flex flex-col gap-3">
             {displayedModels.map((m) => {
               const providerKey = `OLLAMA_MODEL_${m.id}`;
-              const info = installations?.[providerKey] || { status: 'idle', logs: [], progress: 0 };
+              const info = getModelInfo(installations, m.id);
               const isPulling = info.status === 'installing';
-              const isPulled = info.status === 'completed' || info.status === 'installed';
+              const isPulled = isDoneStatus(info.status);
 
               return (
                 <div key={m.id} className={cn("flex flex-col gap-3 p-4 rounded-xl border border-border/50 transition-colors shadow-sm", isPulled ? "bg-primary/5 border-primary/20" : "bg-card/40 hover:bg-card/60 hover:shadow-md")}>
