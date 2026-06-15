@@ -41,10 +41,73 @@ class StorageSpecs(BaseModel):
     freeGb: float
     percent: float
 
+class GpuSpecs(BaseModel):
+    name: str
+    utilizationPercent: float | None = None
+    memoryTotalGb: float | None = None
+    memoryUsedGb: float | None = None
+    memoryPercent: float | None = None
+
 class SystemSpecsResponse(BaseModel):
     cpu: CpuSpecs
     ram: RamSpecs
     storage: StorageSpecs
+    gpu: list[GpuSpecs] = []
+
+def _get_gpu_specs() -> list[GpuSpecs]:
+    gpus: list[GpuSpecs] = []
+
+    try:
+        result = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=name,utilization.gpu,memory.total,memory.used",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                parts = [part.strip() for part in line.split(",")]
+                if len(parts) < 4 or not parts[0]:
+                    continue
+
+                total_mb = float(parts[2])
+                used_mb = float(parts[3])
+                memory_percent = (used_mb / total_mb * 100) if total_mb > 0 else 0
+                gpus.append(GpuSpecs(
+                    name=parts[0],
+                    utilizationPercent=float(parts[1]),
+                    memoryTotalGb=round(total_mb / 1024, 1),
+                    memoryUsedGb=round(used_mb / 1024, 1),
+                    memoryPercent=round(memory_percent, 1),
+                ))
+            if gpus:
+                return gpus
+    except Exception:
+        pass
+
+    if platform.system() == "Darwin":
+        try:
+            result = subprocess.run(
+                ["system_profiler", "SPDisplaysDataType"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            if result.returncode == 0:
+                for line in result.stdout.splitlines():
+                    stripped = line.strip()
+                    if stripped.startswith("Chipset Model:"):
+                        name = stripped.split(":", 1)[1].strip()
+                        if name:
+                            gpus.append(GpuSpecs(name=name))
+        except Exception:
+            pass
+
+    return gpus
 
 def _fetch_registry_size(model_id: str) -> tuple[str, str]:
     url = f"https://registry.ollama.ai/v2/library/{model_id}/manifests/latest"
@@ -174,7 +237,8 @@ async def get_system_specs():
         return SystemSpecsResponse(
             cpu=cpu_specs,
             ram=ram_specs,
-            storage=storage_specs
+            storage=storage_specs,
+            gpu=_get_gpu_specs()
         )
     except Exception as e:
         raise HTTPException(
