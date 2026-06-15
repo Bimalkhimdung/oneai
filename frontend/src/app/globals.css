@@ -133,6 +133,51 @@
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 1px 1px rgba(255, 255, 255, 0.1) inset;
   }
 
+  .chat-composer-glow {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+      0 0 18px rgba(16, 185, 129, 0.12),
+      0 0 30px rgba(99, 102, 241, 0.08);
+    isolation: isolate;
+  }
+
+  .chat-composer-glow::before {
+    content: "";
+    position: absolute;
+    inset: -180%;
+    z-index: 0;
+    background:
+      conic-gradient(
+        from 0deg,
+        transparent 0deg,
+        rgba(16, 185, 129, 0.1) 44deg,
+        rgba(52, 211, 153, 0.95) 72deg,
+        rgba(99, 102, 241, 0.6) 108deg,
+        transparent 150deg,
+        transparent 360deg
+      );
+    animation: chat-composer-border-spin 4.5s linear infinite;
+    opacity: 0.9;
+    pointer-events: none;
+  }
+
+  .chat-composer-glow:focus-within {
+    box-shadow:
+      0 0 20px rgba(16, 185, 129, 0.24),
+      0 0 42px rgba(99, 102, 241, 0.16);
+  }
+
+  .chat-composer-glow:focus-within::before {
+    opacity: 1;
+    animation-duration: 3.2s;
+  }
+
+  @keyframes chat-composer-border-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
   /* Sleek Glass Button */
   .btn-glass {
     background: rgba(255, 255, 255, 0.04);

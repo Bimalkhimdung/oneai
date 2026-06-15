@@ -26,13 +26,10 @@ export function useSpeechRecognition(onResult: (text: string) => void) {
         r.lang = 'en-US';
 
         r.onresult = (event: any) => {
-          let currentTranscript = '';
           for (let i = event.resultIndex; i < event.results.length; i++) {
             const transcript = event.results[i][0].transcript;
             if (event.results[i].isFinal) {
               onResultRef.current(transcript + ' ');
-            } else {
-              currentTranscript += transcript;
             }
           }
         };
@@ -53,7 +50,7 @@ export function useSpeechRecognition(onResult: (text: string) => void) {
 
   const toggleListening = useCallback(() => {
     if (!recognition) {
-      alert('Speech recognition is not supported in your browser.');
+      console.warn('Speech recognition is not supported in your browser.');
       return;
     }
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useSocket } from '@/hooks/useSocket';
 import { useCreateChat } from '@/queries/chats';
 import { useServers } from '@/queries/servers';
@@ -14,6 +15,7 @@ import { MissingModelAlert } from '@/components/chat/MissingModelAlert';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useMcpServers } from '@/queries/mcp';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/stores/auth';
 
 export default function ChatIndexPage() {
   useSocket();
@@ -21,6 +23,14 @@ export default function ChatIndexPage() {
   const { data: servers } = useServers();
   const { data: mcpServers } = useMcpServers();
   const createChat = useCreateChat();
+  const user = useAuthStore((s) => s.user);
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  };
 
   const [draft, setDraft] = useState('');
   const [selectedModel, setSelectedModel] = useState<string>('');
@@ -76,7 +86,7 @@ export default function ChatIndexPage() {
       e.target.value = '';
       return;
     }
-    
+
     if (!selectedModel) {
       toast.error("Please select a model first.");
       e.target.value = '';
@@ -89,14 +99,14 @@ export default function ChatIndexPage() {
         modelId: selectedModel,
         title: `Document: ${file.name}`
       });
-      
+
       const formData = new FormData();
       formData.append('file', file);
       await api(`/chats/${chat.id}/documents`, {
         method: 'POST',
         body: formData,
       });
-      
+
       router.push(`/chat/${chat.id}`);
     } catch (err: any) {
       if (err instanceof ApiClientError && err.status === 422) {
@@ -113,7 +123,7 @@ export default function ChatIndexPage() {
   const handleStartChat = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!draft.trim() || !selectedModel) return;
-    
+
     setIsStarting(true);
     try {
       const generatedTitle = draft.split(' ').slice(0, 6).join(' ') + (draft.split(' ').length > 6 ? '...' : '');
@@ -121,7 +131,7 @@ export default function ChatIndexPage() {
         modelId: selectedModel,
         title: generatedTitle || "New chat"
       });
-      
+
       await api(`/chats/${chat.id}/messages`, {
         method: 'POST',
         body: JSON.stringify({ content: draft, web_search: webSearchEnabled, mcp_enabled: mcpEnabled })
@@ -142,19 +152,23 @@ export default function ChatIndexPage() {
           <div className="absolute inset-0 bg-primary/5 rounded-[1px] blur-xl" />
           <Bot className="w-8 h-8 text-primary/70 relative z-10" />
         </div>
-        
-        <h2 className="text-2xl font-medium text-foreground mb-8 text-center tracking-tight">
-          How can I help you today?
-        </h2>
+
+        <div className="text-center mb-8 tracking-tight">
+          <h2 className="text-2xl font-medium text-foreground mb-1">
+            {getGreeting()}, {user?.fullName?.split(' ')[0] || 'there'}!
+          </h2>
+          <p className="text-muted-foreground">How can I help you today?</p>
+        </div>
 
         {availableModels.length > 0 ? (
           <form onSubmit={handleStartChat} className="w-full flex flex-col gap-4">
-            <div className="relative flex items-center group w-full rounded-[1px] bg-transparent border border-border/50 transition-all duration-300 focus-within:border-primary/50 focus-within:shadow-[0_0_20px_rgba(255,255,255,0.05)] dark:focus-within:shadow-[0_0_20px_rgba(255,255,255,0.05)]">
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleFileChange} 
-                className="hidden" 
+            <div className="chat-composer-glow relative group w-full rounded-[1px] p-[1px] overflow-hidden shadow-sm transition-all duration-300">
+              <div className="relative flex items-center w-full h-full bg-background rounded-[1px] z-10">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
                 accept=".txt,.md,.csv,.json,.js,.py,.html,.css,.ts,.tsx,.pdf"
               />
               <div className="absolute left-2 top-1/2 z-20 -translate-y-1/2" ref={menuRef}>
@@ -278,16 +292,16 @@ export default function ChatIndexPage() {
                     disabled={isStarting || isUploading}
                     className={cn(
                       "h-10 w-10 rounded-full transition-all duration-300",
-                      isListening 
-                        ? "text-red-500 bg-red-500/10 hover:bg-red-500/20 animate-pulse" 
+                      isListening
+                        ? "text-red-500 bg-red-500/10 hover:bg-red-500/20 animate-pulse"
                         : "text-muted-foreground hover:text-foreground hover:bg-card/50"
                     )}
                   >
                     <Mic className="w-4 h-4" />
                   </Button>
                 )}
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   disabled={!draft.trim() || !selectedModel || isStarting || isUploading}
                   className="h-10 w-10 p-0 rounded-[1px] hover:bg-primary shadow-md transition-all"
                 >
@@ -295,10 +309,11 @@ export default function ChatIndexPage() {
                 </Button>
               </div>
             </div>
+            </div>
 
             <div className="flex items-center justify-start gap-2 mt-2 pl-2">
               <span className="text-xs text-muted-foreground">Using model:</span>
-              <select 
+              <select
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
                 className="bg-transparent border border-border/50 text-xs text-foreground rounded-[1px] h-7 px-2 focus:ring-1 focus:ring-primary/50 outline-none w-48"
@@ -315,8 +330,11 @@ export default function ChatIndexPage() {
             </div>
           </form>
         ) : (
-          <div className="w-full h-14 flex items-center justify-center border border-dashed border-border/50 rounded-[1px] bg-card/20">
+          <div className="w-full py-8 flex flex-col items-center justify-center border border-dashed border-border/50 rounded-[1px] bg-card/20 gap-4">
             <p className="text-sm text-muted-foreground">You must connect a Node and install a model to chat.</p>
+            <Button asChild className="rounded-[1px]">
+              <Link href="/servers/new">Connect to Node</Link>
+            </Button>
           </div>
         )}
         <MissingModelAlert isOpen={showMissingModel} onOpenChange={setShowMissingModel} />

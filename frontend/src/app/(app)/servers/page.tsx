@@ -156,7 +156,8 @@ function StatusBadge({ status }: { status: string }) {
     UNKNOWN: fallback,
   };
   
-  const config = map[status] ?? fallback;
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  const config = (map[status] ?? fallback)!;
   const Icon = config.icon;
   
   return (

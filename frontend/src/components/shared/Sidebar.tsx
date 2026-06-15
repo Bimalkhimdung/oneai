@@ -50,8 +50,14 @@ export function Sidebar() {
   return (
     <aside className="hidden w-60 shrink-0 border-r bg-muted/10 md:flex md:flex-col justify-between">
       <div className="flex flex-col flex-1 min-h-0">
-        <div className="flex h-14 items-center gap-2.5 border-b px-5">
-          <Image src="/logo/hero/local.svg" alt="Local AI Logo" width={20} height={100} className="h-[110%] w-auto max-h-20" priority />
+        <div className="flex h-14 items-center justify-between border-b px-4">
+          <span
+            className="text-[15px] font-bold tracking-tight select-none"
+            style={{ fontFamily: 'var(--font-brand, sans-serif)', letterSpacing: '-0.02em' }}
+          >
+            <span className="text-foreground">Local</span><span className="text-primary">AI</span>
+          </span>
+          <Image src="/logo/hero/local1.svg" alt="Local AI Logo" width={20} height={100} className="h-[160%] w-auto max-h-50" priority />
         </div>
         <nav className="flex-1 space-y-1.5 p-3 overflow-y-auto">
           {items.map((item) => {

@@ -111,7 +111,7 @@ export default function NewServerPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
+    <div className="w-full max-w-full animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
       <Link href="/servers" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
         <ArrowLeft className="w-4 h-4 mr-2" />
         Back to Inference Nodes

@@ -24,7 +24,7 @@ export default function DashboardPage() {
         ]);
 
         const installedCount = Object.values(installsRes || {}).filter((i: any) => i.status === 'installed' || i.status === 'completed').length;
-        
+
         setStats({
           servers: Array.isArray(serversRes) ? serversRes.length : 0,
           models: installedCount,
@@ -37,7 +37,6 @@ export default function DashboardPage() {
     }
     loadStats();
   }, []);
-
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
 
@@ -136,7 +135,7 @@ export default function DashboardPage() {
               </div>
               <div className="text-xs text-muted-foreground whitespace-nowrap font-mono">Just now</div>
             </div>
-            
+
             {stats.models > 0 && (
               <div className="flex items-center gap-4">
                 <div className="w-9 h-9 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
@@ -149,7 +148,7 @@ export default function DashboardPage() {
                 <div className="text-xs text-muted-foreground whitespace-nowrap font-mono">Recent</div>
               </div>
             )}
-            
+
             <div className="flex items-center gap-4 opacity-50">
               <div className="w-9 h-9 rounded-full border border-dashed border-border flex items-center justify-center shrink-0">
                 <MessageSquare className="w-4 h-4 text-muted-foreground" />
