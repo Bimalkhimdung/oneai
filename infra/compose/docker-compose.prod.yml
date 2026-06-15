@@ -82,6 +82,7 @@ services:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL}
       NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL}
+      NEXT_PUBLIC_IS_DOCKER: "true"
     depends_on:
       api: { condition: service_started }
     ports:

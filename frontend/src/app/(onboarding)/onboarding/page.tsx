@@ -7,6 +7,8 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { Input } from '@/components/ui/input';
+import { useCreateServer, useTestServer } from '@/queries/servers';
 import {
   Cloud,
   Monitor,
@@ -190,6 +192,14 @@ export default function OnboardingPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
 
+  const isDocker = process.env.NEXT_PUBLIC_IS_DOCKER === 'true';
+  const [customHost, setCustomHost] = useState(isDocker ? 'host.docker.internal' : 'localhost');
+  const [customPort, setCustomPort] = useState(11434);
+  const [isConnecting, setIsConnecting] = useState(false);
+
+  const testServer = useTestServer();
+  const createServer = useCreateServer();
+
   const [providerType, setProviderType] = useState<ProviderType>(null);
   const [selectedLocal, setSelectedLocal] = useState<LocalProvider>(null);
   
@@ -274,6 +284,38 @@ export default function OnboardingPage() {
       localStorage.setItem(`onboarding_done_${user.id}`, '1');
     }
     router.replace('/dashboard');
+  }
+
+  async function handleConnectExisting() {
+    if (!customHost || !customPort) {
+      toast.error('Host and Port are required');
+      return;
+    }
+    setIsConnecting(true);
+    try {
+      const res = await testServer.mutateAsync({
+        host: customHost,
+        port: customPort,
+        provider: selectedLocal as any,
+      });
+
+      if (res.ok) {
+        await createServer.mutateAsync({
+          name: `Local ${activeProviderData?.name || 'Ollama'}`,
+          host: customHost,
+          port: customPort,
+          provider: selectedLocal as any,
+        });
+        toast.success(`Connected successfully — ${activeProviderData?.name || 'Ollama'} v${res.version ?? 'unknown'}`);
+        markDoneAndContinue();
+      } else {
+        toast.error(res.error ?? 'Could not connect to Ollama endpoint');
+      }
+    } catch (err: any) {
+      toast.error(err instanceof Error ? err.message : 'Connection failed');
+    } finally {
+      setIsConnecting(false);
+    }
   }
 
   const activeProviderData = LOCAL_PROVIDERS.find((p) => p.id === selectedLocal);
@@ -525,6 +567,47 @@ export default function OnboardingPage() {
                           </div>
                         );
                       })()}
+                    </div>
+                  </div>
+
+                  {/* Connect Existing Form */}
+                  <div className="p-6 rounded-2xl bg-white/[0.02] border border-border/20 backdrop-blur-sm animate-in fade-in zoom-in-95 duration-300 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-foreground text-sm">Or Connect to an Existing {activeProviderData.name} Instance</span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-4 items-end">
+                      <div className="flex-1 space-y-1.5 w-full">
+                        <label className="text-xs text-muted-foreground font-medium flex items-center gap-1">Host / IP Address</label>
+                        <Input
+                          value={customHost}
+                          onChange={(e) => setCustomHost(e.target.value)}
+                          placeholder={isDocker ? "host.docker.internal" : "localhost"}
+                          className="h-9 text-xs rounded-xl bg-card/50 border-border/40 focus-visible:ring-primary/50 text-foreground"
+                        />
+                      </div>
+                      <div className="w-full sm:w-28 space-y-1.5">
+                        <label className="text-xs text-muted-foreground font-medium flex items-center gap-1">Port</label>
+                        <Input
+                          type="number"
+                          value={customPort}
+                          onChange={(e) => setCustomPort(Number(e.target.value))}
+                          placeholder="11434"
+                          className="h-9 text-xs rounded-xl bg-card/50 border-border/40 focus-visible:ring-primary/50 text-foreground"
+                        />
+                      </div>
+                      <Button
+                        size="sm"
+                        disabled={isConnecting}
+                        onClick={handleConnectExisting}
+                        className="h-9 text-xs gap-1.5 rounded-xl w-full sm:w-auto shrink-0 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30"
+                      >
+                        {isConnecting ? (
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        )}
+                        Connect
+                      </Button>
                     </div>
                   </div>
                 </div>

@@ -24,9 +24,11 @@ export default function NewServerPage() {
   const create = useCreateServer();
   const test = useTestServer();
 
+  const isDocker = process.env.NEXT_PUBLIC_IS_DOCKER === 'true';
+
   const [form, setForm] = useState({
     name: '',
-    host: 'localhost',
+    host: isDocker ? 'host.docker.internal' : 'localhost',
     port: 11434,
     provider: 'OLLAMA' as const,
     apiKey: '',
