@@ -3,8 +3,46 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { api } from '@/lib/api';
-import { Server, Database, MessageSquare, Cpu, ArrowUpRight, HardDrive, MemoryStick, Gauge } from 'lucide-react';
+import { Server, Database, MessageSquare, Cpu, ArrowUpRight, HardDrive, MemoryStick, Gauge, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
+
+interface ProviderInstallInfo {
+  status: 'idle' | 'installing' | 'completed' | 'installed' | 'failed';
+  logs: string[];
+  progress: number;
+}
+
+interface InstallationsResponse {
+  [key: string]: ProviderInstallInfo;
+}
+
+interface DashboardServer {
+  id: string;
+  name: string;
+  provider: string;
+  status: 'ONLINE' | 'OFFLINE' | 'UNKNOWN' | 'ERROR';
+  lastSeenAt: string | null;
+  createdAt: string;
+  models: Array<{ id: string; name: string }>;
+}
+
+interface DashboardChat {
+  id: string;
+  title: string;
+  updatedAt: string;
+  createdAt: string;
+}
+
+interface RecentActivityItem {
+  id: string;
+  title: string;
+  description: string;
+  time: string;
+  timestamp: number;
+  href: string;
+  icon: LucideIcon;
+  tone: string;
+}
 
 interface SystemSpecs {
   cpu: {
@@ -45,6 +83,88 @@ const utilizationLabel = (value: number) => {
   if (value >= 65) return 'Moderate';
   return 'Healthy';
 };
+
+const formatRelativeTime = (dateValue?: string | null) => {
+  if (!dateValue) return 'Recent';
+
+  const time = new Date(dateValue).getTime();
+  if (Number.isNaN(time)) return 'Recent';
+
+  const diffMs = Date.now() - time;
+  if (diffMs < 60_000) return 'Just now';
+
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 60) return `${minutes}m ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+
+  return new Date(dateValue).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
+};
+
+const doneStatuses = new Set(['installed', 'completed']);
+
+function buildRecentActivity(
+  servers: DashboardServer[],
+  installations: InstallationsResponse,
+  chats: DashboardChat[],
+): RecentActivityItem[] {
+  const installedModelIds = Object.entries(installations)
+    .filter(([key, info]) => key.startsWith('OLLAMA_MODEL_') && doneStatuses.has(info.status))
+    .map(([key]) => key.replace('OLLAMA_MODEL_', ''))
+    .filter((id, index, ids) => id.includes(':') || !ids.some((other) => other.startsWith(`${id}:`) && other !== id));
+
+  const chatItems = chats.slice(0, 3).map((chat) => ({
+    id: `chat-${chat.id}`,
+    title: chat.title || 'Untitled chat',
+    description: 'Conversation updated',
+    time: formatRelativeTime(chat.updatedAt),
+    timestamp: new Date(chat.updatedAt).getTime() || 0,
+    href: `/chat/${chat.id}`,
+    icon: MessageSquare,
+    tone: 'text-purple-500 bg-purple-500/10 border-purple-500/20',
+  }));
+
+  const serverItems = servers
+    .filter((server) => server.status === 'ONLINE')
+    .slice(0, 2)
+    .map((server) => {
+      const timeValue = server.lastSeenAt || server.createdAt;
+      return {
+        id: `server-${server.id}`,
+        title: `${server.name} online`,
+        description: `${server.models.length} local ${server.models.length === 1 ? 'model' : 'models'} available`,
+        time: formatRelativeTime(timeValue),
+        timestamp: new Date(timeValue).getTime() || 0,
+        href: '/servers',
+        icon: Server,
+        tone: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
+      };
+    });
+
+  const modelItems = installedModelIds.length > 0
+    ? [{
+        id: 'installed-models',
+        title: `${installedModelIds.length} ${installedModelIds.length === 1 ? 'model' : 'models'} installed`,
+        description: installedModelIds.slice(0, 3).join(', '),
+        time: 'Ready',
+        timestamp: 0,
+        href: '/settings/ollama/models',
+        icon: Cpu,
+        tone: 'text-blue-500 bg-blue-500/10 border-blue-500/20',
+      }]
+    : [];
+
+  return [...chatItems, ...serverItems, ...modelItems]
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(0, 5);
+}
 
 function UtilizationRow({
   icon: Icon,
@@ -131,6 +251,7 @@ export default function DashboardPage() {
     chats: 0,
     loading: true
   });
+  const [recentActivity, setRecentActivity] = useState<RecentActivityItem[]>([]);
   const [systemSpecs, setSystemSpecs] = useState<SystemSpecs | null>(null);
   const [systemLoading, setSystemLoading] = useState(true);
 
@@ -138,12 +259,14 @@ export default function DashboardPage() {
     async function loadStats() {
       try {
         const [serversRes, installsRes, chatsRes] = await Promise.all([
-          api('/servers').catch(() => []),
-          api('/settings/installations').catch(() => ({})),
-          api('/chats').catch(() => [])
+          api<DashboardServer[]>('/servers').catch(() => []),
+          api<InstallationsResponse>('/settings/installations').catch(() => ({} as InstallationsResponse)),
+          api<DashboardChat[]>('/chats').catch(() => [])
         ]);
 
-        const installedCount = Object.values(installsRes || {}).filter((i: any) => i.status === 'installed' || i.status === 'completed').length;
+        const installedCount = Object.entries(installsRes || {})
+          .filter(([key, info]) => key.startsWith('OLLAMA_MODEL_') && doneStatuses.has(info.status))
+          .length;
 
         setStats({
           servers: Array.isArray(serversRes) ? serversRes.length : 0,
@@ -151,11 +274,14 @@ export default function DashboardPage() {
           chats: Array.isArray(chatsRes) ? chatsRes.length : 0,
           loading: false
         });
+        setRecentActivity(buildRecentActivity(serversRes, installsRes, chatsRes));
       } catch (err) {
         setStats(s => ({ ...s, loading: false }));
       }
     }
     loadStats();
+    const interval = setInterval(loadStats, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -335,39 +461,48 @@ export default function DashboardPage() {
               Your latest interactions and updates.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6 pt-2">
-            <div className="flex items-center gap-4">
-              <div className="w-9 h-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-                <Database className="w-4 h-4 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate text-foreground">System Initialized</p>
-                <p className="text-xs text-muted-foreground">Welcome back to your local environment.</p>
-              </div>
-              <div className="text-xs text-muted-foreground whitespace-nowrap font-mono">Just now</div>
-            </div>
-
-            {stats.models > 0 && (
-              <div className="flex items-center gap-4">
-                <div className="w-9 h-9 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
-                  <Cpu className="w-4 h-4 text-blue-500" />
+          <CardContent className="space-y-3 pt-2">
+            {stats.loading ? (
+              Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="flex items-center gap-4 rounded-[4px] border border-border/40 bg-background/20 p-3">
+                  <div className="w-9 h-9 rounded-full bg-muted animate-pulse shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 w-2/3 rounded bg-muted animate-pulse" />
+                    <div className="h-2 w-1/2 rounded bg-muted/70 animate-pulse" />
+                  </div>
+                </div>
+              ))
+            ) : recentActivity.length > 0 ? (
+              recentActivity.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.id}
+                    href={item.href as any}
+                    className="flex items-center gap-4 rounded-[4px] border border-border/40 bg-background/20 p-3 transition-colors hover:bg-background/45 hover:border-border/80"
+                  >
+                    <div className={`w-9 h-9 rounded-full border flex items-center justify-center shrink-0 ${item.tone}`}>
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate text-foreground">{item.title}</p>
+                      <p className="text-xs text-muted-foreground truncate">{item.description}</p>
+                    </div>
+                    <div className="text-xs text-muted-foreground whitespace-nowrap font-mono">{item.time}</div>
+                  </Link>
+                );
+              })
+            ) : (
+              <div className="flex items-center gap-4 rounded-[4px] border border-dashed border-border p-4 opacity-70">
+                <div className="w-9 h-9 rounded-full border border-border flex items-center justify-center shrink-0">
+                  <Database className="w-4 h-4 text-muted-foreground" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate text-foreground">{stats.models} Models Installed</p>
-                  <p className="text-xs text-muted-foreground">Ready for local inference tasks.</p>
+                  <p className="text-sm font-medium truncate text-muted-foreground">No recent activity yet</p>
+                  <p className="text-xs text-muted-foreground">Connect a server or start a chat to populate this feed.</p>
                 </div>
-                <div className="text-xs text-muted-foreground whitespace-nowrap font-mono">Recent</div>
               </div>
             )}
-
-            <div className="flex items-center gap-4 opacity-50">
-              <div className="w-9 h-9 rounded-full border border-dashed border-border flex items-center justify-center shrink-0">
-                <MessageSquare className="w-4 h-4 text-muted-foreground" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate text-muted-foreground">Awaiting first prompt...</p>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>
