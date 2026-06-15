@@ -18,17 +18,6 @@ services:
       timeout: 5s
       retries: 10
 
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes:
-      - redisdata:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 10
   pgvector-init:
     image: pgvector/pgvector:pg18
     restart: "no"
@@ -47,14 +36,25 @@ services:
         "${POSTGRES_DB}",
         "-c",
         "CREATE EXTENSION IF NOT EXISTS vector;"
-      ]      
+      ]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
 
   # ── Application services ──────────────────────────────────────────────────
 
   api:
-    build:
-      context: ../..
-      dockerfile: infra/docker/api.Dockerfile
+    
+    image:
     restart: unless-stopped
     environment:
       API_PORT: 8000
@@ -68,7 +68,7 @@ services:
       WEB_ORIGIN: ${WEB_ORIGIN}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     depends_on:
-      postgres: { condition: service_healthy }
+      pgvector-init: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
     ports:
       - "8000:8000"
@@ -81,7 +81,6 @@ services:
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL}
-      NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL}
     depends_on:
       api: { condition: service_started }
     ports:

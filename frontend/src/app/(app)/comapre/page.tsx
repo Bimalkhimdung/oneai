@@ -26,8 +26,12 @@ type CompareRun = {
   title: string;
   prompt: string;
   modelIds: string[];
-  results: CompareResultDto[];
+  results: CompareRunResult[];
   createdAt: string;
+};
+
+type CompareRunResult = CompareResultDto & {
+  pending?: boolean;
 };
 
 const STORAGE_KEY = 'local-ai-hub:compare-runs';
@@ -103,24 +107,59 @@ export default function ComparePage() {
     }
 
     const submittedPrompt = prompt.trim();
+    const runId = crypto.randomUUID();
+    const placeholderResults: CompareRunResult[] = selectedModelIds.map((modelId) => {
+      const model = installedModels.find((item) => item.id === modelId);
+      return {
+        modelId,
+        modelName: model?.name || 'Selected model',
+        content: '',
+        tokensIn: null,
+        tokensOut: null,
+        durationMs: null,
+        pending: true,
+      };
+    });
+    const pendingRun: CompareRun = {
+      id: runId,
+      title: safeTitle(submittedPrompt),
+      prompt: submittedPrompt,
+      modelIds: selectedModelIds,
+      results: placeholderResults,
+      createdAt: new Date().toISOString(),
+    };
+
+    setRuns((prev) => [pendingRun, ...prev].slice(0, 30));
+    setActiveRunId(runId);
+    setPrompt('');
+
     try {
       const response = await compare.mutateAsync({
         prompt: submittedPrompt,
         modelIds: selectedModelIds,
       });
-      const run: CompareRun = {
-        id: crypto.randomUUID(),
-        title: safeTitle(submittedPrompt),
-        prompt: submittedPrompt,
-        modelIds: selectedModelIds,
+      const completedRun: CompareRun = {
+        ...pendingRun,
         results: response.results,
-        createdAt: new Date().toISOString(),
       };
-      const nextRuns = [run, ...runs].slice(0, 30);
-      persistRuns(nextRuns);
-      setActiveRunId(run.id);
-      setPrompt('');
+      setRuns((prev) => {
+        const nextRuns = prev.map((run) => run.id === runId ? completedRun : run);
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextRuns));
+        return nextRuns;
+      });
     } catch (error: any) {
+      setRuns((prev) => prev.map((run) => (
+        run.id === runId
+          ? {
+              ...run,
+              results: run.results.map((result) => ({
+                ...result,
+                pending: false,
+                error: error?.message || 'Failed to compare models.',
+              })),
+            }
+          : run
+      )));
       toast.error(error?.message || 'Failed to compare models.');
     }
   }
@@ -299,7 +338,13 @@ export default function ComparePage() {
                           </span>
                         ) : null}
                       </div>
-                      {result.error ? (
+                      {result.pending ? (
+                        <div className="flex items-center gap-1.5 h-16 text-muted-foreground/70">
+                          <div className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <div className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <div className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </div>
+                      ) : result.error ? (
                         <p className="text-sm text-destructive">{result.error}</p>
                       ) : (
                         <ReactMarkdown
