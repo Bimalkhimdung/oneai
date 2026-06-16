@@ -16,6 +16,7 @@ from sqlalchemy import (
     Index,
 )
 from sqlalchemy.orm import relationship
+from pgvector.sqlalchemy import Vector
 from .database import Base
 
 def generate_cuid():
@@ -299,6 +300,84 @@ class UserSettings(Base):
     preferences = Column(JSON, nullable=True)
 
     user = relationship("User", back_populates="settings")
+
+class AgentSession(Base):
+    __tablename__ = "agent_sessions"
+
+    id = Column(String, primary_key=True, default=generate_cuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String, nullable=True)
+    status = Column(String, default="ACTIVE", nullable=False)
+    system_prompt = Column(String, nullable=True)
+    team_id = Column(String, ForeignKey("agent_teams.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
+
+    user = relationship("User")
+    memories = relationship("AgentMemory", back_populates="session", cascade="all, delete-orphan")
+    messages = relationship("AgentMessage", back_populates="session", cascade="all, delete-orphan")
+
+class AgentMemory(Base):
+    __tablename__ = "agent_memories"
+
+    id = Column(String, primary_key=True, default=generate_cuid)
+    session_id = Column(String, ForeignKey("agent_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    content = Column(String, nullable=False)
+    embedding = Column(Vector(768), nullable=False)
+    source = Column(String, nullable=True)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+    session = relationship("AgentSession", back_populates="memories")
+
+
+class AgentMessage(Base):
+    __tablename__ = "agent_messages"
+
+    id = Column(String, primary_key=True, default=generate_cuid)
+    session_id = Column(String, ForeignKey("agent_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(String, nullable=False)
+    content = Column(String, nullable=False)
+    event_type = Column(String, nullable=True)
+    meta_data = Column("metadata", JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+    session = relationship("AgentSession", back_populates="messages")
+
+    __table_args__ = (
+        Index("agent_messages_session_id_created_at_idx", "session_id", "created_at"),
+    )
+
+
+class AgentTeam(Base):
+    __tablename__ = "agent_teams"
+
+    id = Column(String, primary_key=True, default=generate_cuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
+
+    user = relationship("User")
+    profiles = relationship(
+        "AgentProfile",
+        back_populates="team",
+        cascade="all, delete-orphan",
+        order_by="AgentProfile.sort_order",
+    )
+
+
+class AgentProfile(Base):
+    __tablename__ = "agent_profiles"
+
+    id = Column(String, primary_key=True, default=generate_cuid)
+    team_id = Column(String, ForeignKey("agent_teams.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    role = Column(String, nullable=False)
+    model = Column(String, nullable=False)
+    system_prompt = Column(String, nullable=True)
+    sort_order = Column(Integer, default=0, nullable=False)
+
+    team = relationship("AgentTeam", back_populates="profiles")
 
 # Expose database and schemas inside models folder package
 from . import database

@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, status, UploadFile, File, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import schemas, database
 from app import dependencies
 from app.services import chat as chat_service
+from app.services import chat_agent as chat_agent_service
 
 router = APIRouter(prefix="/chats")
 
@@ -54,6 +56,25 @@ async def send_message(
     db: AsyncSession = Depends(database.get_db)
 ):
     return await chat_service.send_message(db, id, current_user["id"], input_data)
+
+@router.post("/{id}/agent")
+async def run_chat_agent(
+    id: str,
+    input_data: schemas.ChatAgentRunRequest,
+    current_user: dict = Depends(dependencies.require_auth),
+    db: AsyncSession = Depends(database.get_db),
+):
+    async def event_stream():
+        async for chunk in chat_agent_service.run_chat_agent(
+            db, id, current_user["id"], input_data
+        ):
+            yield chunk
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 @router.post("/{id}/documents", status_code=status.HTTP_201_CREATED)
 async def upload_document(

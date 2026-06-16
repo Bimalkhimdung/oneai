@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { api } from '@/lib/api';
-import { Server, Database, MessageSquare, Cpu, ArrowUpRight, HardDrive, MemoryStick, Gauge, type LucideIcon } from 'lucide-react';
+import { Server, Database, MessageSquare, Cpu, ArrowUpRight, HardDrive, MemoryStick, Gauge, BarChart3, CalendarDays, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 
 interface ProviderInstallInfo {
@@ -42,6 +42,27 @@ interface RecentActivityItem {
   href: string;
   icon: LucideIcon;
   tone: string;
+}
+
+interface TokenUsageRow {
+  date: string;
+  tokensIn: number;
+  tokensOut: number;
+  totalTokens: number;
+}
+
+interface TokenUsageResponse {
+  range: {
+    days: number;
+    startDate: string;
+    endDate: string;
+  };
+  totals: {
+    tokensIn: number;
+    tokensOut: number;
+    totalTokens: number;
+  };
+  rows: TokenUsageRow[];
 }
 
 interface SystemSpecs {
@@ -109,16 +130,44 @@ const formatRelativeTime = (dateValue?: string | null) => {
 };
 
 const doneStatuses = new Set(['installed', 'completed']);
+const tokenRanges = [7, 30, 90];
+
+const formatTokenCount = (value: number) => new Intl.NumberFormat(undefined, {
+  notation: value >= 10_000 ? 'compact' : 'standard',
+  maximumFractionDigits: 1,
+}).format(value);
+
+const formatUsageDate = (dateValue: string) => new Date(`${dateValue}T00:00:00`).toLocaleDateString(undefined, {
+  month: 'short',
+  day: 'numeric',
+});
+
+const getTokenSeriesPoints = (
+  rows: TokenUsageRow[],
+  key: 'tokensIn' | 'tokensOut' | 'totalTokens',
+  maxValue: number,
+) => rows.map((row, index) => {
+  const x = rows.length === 1 ? 50 : (index / (rows.length - 1)) * 100;
+  const y = 92 - ((row[key] / maxValue) * 84);
+  return `${x.toFixed(2)},${y.toFixed(2)}`;
+}).join(' ');
+
+const getInstalledModelIds = (installations: InstallationsResponse) => {
+  const ids = Object.entries(installations)
+    .filter(([key, info]) => key.startsWith('OLLAMA_MODEL_') && doneStatuses.has(info.status))
+    .map(([key]) => key.replace('OLLAMA_MODEL_', ''));
+
+  return ids.filter((id) => (
+    id.includes(':') || !ids.some((other) => other.startsWith(`${id}:`) && other !== id)
+  ));
+};
 
 function buildRecentActivity(
   servers: DashboardServer[],
   installations: InstallationsResponse,
   chats: DashboardChat[],
 ): RecentActivityItem[] {
-  const installedModelIds = Object.entries(installations)
-    .filter(([key, info]) => key.startsWith('OLLAMA_MODEL_') && doneStatuses.has(info.status))
-    .map(([key]) => key.replace('OLLAMA_MODEL_', ''))
-    .filter((id, index, ids) => id.includes(':') || !ids.some((other) => other.startsWith(`${id}:`) && other !== id));
+  const installedModelIds = getInstalledModelIds(installations);
 
   const chatItems = chats.slice(0, 3).map((chat) => ({
     id: `chat-${chat.id}`,
@@ -254,6 +303,9 @@ export default function DashboardPage() {
   const [recentActivity, setRecentActivity] = useState<RecentActivityItem[]>([]);
   const [systemSpecs, setSystemSpecs] = useState<SystemSpecs | null>(null);
   const [systemLoading, setSystemLoading] = useState(true);
+  const [tokenRange, setTokenRange] = useState(7);
+  const [tokenUsage, setTokenUsage] = useState<TokenUsageResponse | null>(null);
+  const [tokenUsageLoading, setTokenUsageLoading] = useState(true);
 
   useEffect(() => {
     async function loadStats() {
@@ -264,9 +316,7 @@ export default function DashboardPage() {
           api<DashboardChat[]>('/chats').catch(() => [])
         ]);
 
-        const installedCount = Object.entries(installsRes || {})
-          .filter(([key, info]) => key.startsWith('OLLAMA_MODEL_') && doneStatuses.has(info.status))
-          .length;
+        const installedCount = getInstalledModelIds(installsRes || {}).length;
 
         setStats({
           servers: Array.isArray(serversRes) ? serversRes.length : 0,
@@ -301,10 +351,28 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    async function loadTokenUsage() {
+      setTokenUsageLoading(true);
+      try {
+        const data = await api<TokenUsageResponse>(`/dashboard/token-usage?days=${tokenRange}`);
+        setTokenUsage(data);
+      } catch (err) {
+        console.error('Failed to load token usage', err);
+        setTokenUsage(null);
+      } finally {
+        setTokenUsageLoading(false);
+      }
+    }
+
+    loadTokenUsage();
+  }, [tokenRange]);
+
   const averageUtilization = systemSpecs
     ? (systemSpecs.cpu.percent + systemSpecs.ram.percent + systemSpecs.storage.percent) / 3
     : 0;
   const gpuList = systemSpecs?.gpu ?? [];
+  const maxDailyTokens = Math.max(...(tokenUsage?.rows.map((row) => row.totalTokens) ?? [0]), 1);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
@@ -368,6 +436,184 @@ export default function DashboardPage() {
           </Card>
         </Link>
       </div>
+
+      <Card className="rounded-[4px] bg-card/80 border border-border/80 shadow-sm overflow-hidden">
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-primary" />
+              Token Utilization
+            </CardTitle>
+            <CardDescription>
+              Daily prompt and response token usage across your chats.
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2 rounded-[4px] border border-border/60 bg-background/30 p-1">
+            <CalendarDays className="ml-2 h-4 w-4 text-muted-foreground" />
+            {tokenRanges.map((days) => (
+              <button
+                key={days}
+                type="button"
+                onClick={() => setTokenRange(days)}
+                className={`rounded-[3px] px-3 py-1.5 text-xs font-medium transition-colors ${
+                  tokenRange === days
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                }`}
+              >
+                {days}D
+              </button>
+            ))}
+          </div>
+        </CardHeader>
+        <CardContent className="border-t border-border/40 bg-neutral-950/20 p-5">
+          {tokenUsageLoading ? (
+            <div className="h-[320px] flex items-center justify-center text-sm text-muted-foreground">
+              Loading token usage...
+            </div>
+          ) : tokenUsage ? (
+            <div className="space-y-6">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-[4px] border border-border/50 bg-background/35 p-4">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Total Tokens</p>
+                  <p className="mt-1 text-2xl font-semibold font-mono">{formatTokenCount(tokenUsage.totals.totalTokens)}</p>
+                </div>
+                <div className="rounded-[4px] border border-border/50 bg-background/35 p-4">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Input Tokens</p>
+                  <p className="mt-1 text-2xl font-semibold font-mono">{formatTokenCount(tokenUsage.totals.tokensIn)}</p>
+                </div>
+                <div className="rounded-[4px] border border-border/50 bg-background/35 p-4">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Output Tokens</p>
+                  <p className="mt-1 text-2xl font-semibold font-mono">{formatTokenCount(tokenUsage.totals.tokensOut)}</p>
+                </div>
+              </div>
+
+              <div className="rounded-[4px] border border-border/50 bg-background/30 p-4">
+                <div className="relative h-64">
+                  <div className="absolute right-0 top-0 text-[10px] font-mono text-muted-foreground">
+                    {formatTokenCount(maxDailyTokens)}
+                  </div>
+                  <div className="absolute bottom-8 right-0 text-[10px] font-mono text-muted-foreground">
+                    0
+                  </div>
+                  <svg
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                    className="h-full w-full overflow-visible pr-8"
+                    role="img"
+                    aria-label="Token usage time-series chart"
+                  >
+                    {[8, 29, 50, 71, 92].map((y) => (
+                      <line
+                        key={y}
+                        x1="0"
+                        x2="100"
+                        y1={y}
+                        y2={y}
+                        className="stroke-border/50"
+                        strokeDasharray="2 2"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    ))}
+                    <polyline
+                      points={getTokenSeriesPoints(tokenUsage.rows, 'totalTokens', maxDailyTokens)}
+                      fill="none"
+                      className="stroke-primary"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <polyline
+                      points={getTokenSeriesPoints(tokenUsage.rows, 'tokensIn', maxDailyTokens)}
+                      fill="none"
+                      className="stroke-blue-500"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <polyline
+                      points={getTokenSeriesPoints(tokenUsage.rows, 'tokensOut', maxDailyTokens)}
+                      fill="none"
+                      className="stroke-emerald-500"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    {tokenUsage.rows.map((row, index) => {
+                      const x = tokenUsage.rows.length === 1 ? 50 : (index / (tokenUsage.rows.length - 1)) * 100;
+                      const y = 92 - ((row.totalTokens / maxDailyTokens) * 84);
+
+                      return row.totalTokens > 0 ? (
+                        <circle
+                          key={row.date}
+                          cx={x}
+                          cy={y}
+                          r="1.2"
+                          className="fill-primary"
+                          vectorEffect="non-scaling-stroke"
+                        >
+                          <title>{`${formatUsageDate(row.date)}: ${row.totalTokens} total tokens`}</title>
+                        </circle>
+                      ) : null;
+                    })}
+                  </svg>
+                  <div className="mt-2 grid grid-cols-3 text-[10px] text-muted-foreground">
+                    <span>{tokenUsage.rows[0]?.date ? formatUsageDate(tokenUsage.rows[0].date) : ''}</span>
+                    <span className="text-center">
+                      {tokenUsage.rows[Math.floor(tokenUsage.rows.length / 2)]?.date
+                        ? formatUsageDate(tokenUsage.rows[Math.floor(tokenUsage.rows.length / 2)]!.date)
+                        : ''}
+                    </span>
+                    <span className="text-right">
+                      {tokenUsage.rows[tokenUsage.rows.length - 1]?.date
+                        ? formatUsageDate(tokenUsage.rows[tokenUsage.rows.length - 1]!.date)
+                        : ''}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-4 flex items-center justify-end gap-4 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-primary" /> Total</span>
+                  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-blue-500" /> Input</span>
+                  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Output</span>
+                </div>
+              </div>
+
+              <div className="overflow-hidden rounded-[4px] border border-border/50">
+                <table className="w-full text-sm">
+                  <thead className="bg-background/50 text-xs uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-medium">Date</th>
+                      <th className="px-4 py-3 text-right font-medium">Input</th>
+                      <th className="px-4 py-3 text-right font-medium">Output</th>
+                      <th className="px-4 py-3 text-right font-medium">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/40">
+                    {tokenUsage.rows.slice().reverse().map((row) => (
+                      <tr key={row.date} className="bg-background/20">
+                        <td className="px-4 py-3 text-foreground">{formatUsageDate(row.date)}</td>
+                        <td className="px-4 py-3 text-right font-mono text-muted-foreground">{formatTokenCount(row.tokensIn)}</td>
+                        <td className="px-4 py-3 text-right font-mono text-muted-foreground">{formatTokenCount(row.tokensOut)}</td>
+                        <td className="px-4 py-3 text-right font-mono font-medium">{formatTokenCount(row.totalTokens)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="h-[320px] flex items-center justify-center">
+              <div className="text-center space-y-2">
+                <BarChart3 className="w-8 h-8 text-muted-foreground/30 mx-auto" />
+                <p className="text-sm text-muted-foreground font-mono">Token usage unavailable</p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Additional layout section */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">

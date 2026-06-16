@@ -194,6 +194,98 @@ export interface McpTestResultDto {
   error?: string | null;
 }
 
+export interface AgentRunRequest {
+  prompt: string;
+  session_id?: string;
+  team_id?: string;
+  agents?: AgentProfileInput[];
+  model?: string;
+  system_prompt?: string;
+  mode?: 'single' | 'multi';
+}
+
+export interface AgentProfileInput {
+  name: string;
+  role: string;
+  model: string;
+  system_prompt?: string;
+}
+
+export interface AgentProfileDto {
+  id: string;
+  name: string;
+  role: string;
+  model: string;
+  systemPrompt?: string | null;
+  sortOrder: number;
+}
+
+export interface AgentTeamDto {
+  id: string;
+  name: string;
+  profiles: AgentProfileDto[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateAgentTeamInput {
+  name: string;
+  profiles: AgentProfileInput[];
+}
+
+export interface AgentSessionDto {
+  id: string;
+  userId: string;
+  title?: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentMessageDto {
+  id: string;
+  sessionId: string;
+  role: string;
+  content: string;
+  eventType?: string | null;
+  metadata?: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface AgentSessionDetailDto extends AgentSessionDto {
+  messages: AgentMessageDto[];
+}
+
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+export type AgentStreamEvent =
+  | { type: 'thought'; content: string }
+  | { type: 'tool_call'; name: string; arguments: Record<string, unknown> }
+  | { type: 'tool_result'; name: string; result: string }
+  | { type: 'agent_message'; agent: string; content: string; model?: string }
+  | { type: 'handoff'; from: string | null; to: string; reason?: string }
+  | { type: 'response'; content: string }
+  | { type: 'error'; content: string }
+  | { type: 'done'; sessionId?: string };
+
+export interface ChatAgentRunRequest {
+  prompt: string;
+}
+
+export type ChatAgentStreamEvent =
+  | { type: 'user_message'; messageId: string; content: string }
+  | { type: 'assistant_message'; messageId: string }
+  | { type: 'thought'; content: string }
+  | { type: 'tool_call'; name: string; arguments: Record<string, unknown> }
+  | { type: 'tool_result'; name: string; result: string }
+  | { type: 'response'; content: string }
+  | { type: 'error'; content: string }
+  | { type: 'done'; chatId: string; userMessageId: string; assistantMessageId: string };
+
 // Socket.IO events contract
 export type ServerStatus = 'ONLINE' | 'OFFLINE' | 'UNKNOWN' | 'ERROR';
 

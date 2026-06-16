@@ -12,8 +12,11 @@ import {
   MessageSquare,
   GitCompare,
   Settings,
+  Bot,
   ChevronDown,
   ChevronRight,
+  User,
+  Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -35,6 +38,16 @@ const items = [
   },
 ] as const;
 
+const agentItem = {
+  href: '/agent',
+  label: 'Agents',
+  icon: Bot,
+  subItems: [
+    { href: '/agent/single', label: 'Single Agent', icon: User },
+    { href: '/agent/multi', label: 'Multi Agent', icon: Users },
+  ],
+};
+
 export function Sidebar() {
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
@@ -42,9 +55,11 @@ export function Sidebar() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    // Auto-expand sections based on current path
     if (pathname?.startsWith('/settings')) {
       setExpanded(prev => ({ ...prev, '/settings': true }));
+    }
+    if (pathname?.startsWith('/agent')) {
+      setExpanded(prev => ({ ...prev, '/agent': true }));
     }
   }, [pathname]);
 
@@ -128,6 +143,62 @@ export function Sidebar() {
               </div>
             );
           })}
+
+          <div className="pt-5">
+            <div className="mb-2 border-t border-border/60 pt-5">
+              <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground/70">
+                Agentic
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              {/* Agents collapsible */}
+              <div className="flex flex-col">
+                <button
+                  onClick={() => setExpanded(prev => ({ ...prev, [agentItem.href]: !prev[agentItem.href] }))}
+                  className={cn(
+                    'flex items-center justify-between gap-3 rounded-md px-3 py-2 text-sm transition-colors w-full group',
+                    pathname?.startsWith('/agent')
+                      ? 'text-primary font-medium'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <Bot className="h-4 w-4" />
+                    <span>{agentItem.label}</span>
+                  </div>
+                  {expanded[agentItem.href] ? <ChevronDown className="h-4 w-4 opacity-70" /> : <ChevronRight className="h-4 w-4 opacity-70" />}
+                </button>
+                {expanded[agentItem.href] && (
+                  <div className="mt-1 flex flex-col space-y-0.5 relative">
+                    <div className="absolute left-[1.375rem] top-0 bottom-1 w-px bg-border/60" />
+                    {agentItem.subItems.map((sub) => {
+                      const SubIcon = sub.icon;
+                      const subActive = pathname === sub.href || pathname?.startsWith(sub.href + '/');
+                      return (
+                        <Link
+                          key={sub.href}
+                          href={sub.href as any}
+                          className={cn(
+                            'flex items-center gap-2 relative pl-10 pr-3 py-1.5 text-sm transition-colors rounded-md',
+                            subActive
+                              ? 'text-foreground font-medium bg-accent/50'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-accent/30'
+                          )}
+                        >
+                          <span className={cn(
+                            "absolute left-[1.375rem] top-1/2 -translate-y-1/2 w-[2px] h-4 -translate-x-1/2 rounded-full transition-colors",
+                            subActive ? "bg-primary" : "bg-transparent"
+                          )} />
+                          <SubIcon className="h-3.5 w-3.5" />
+                          {sub.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </nav>
       </div>
 

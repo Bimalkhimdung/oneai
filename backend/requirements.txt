@@ -18,3 +18,7 @@ alembic
 langchain-text-splitters
 PyMuPDF
 mcp
+duckduckgo-search
+ollama
+langchain-core
+langchain-ollama

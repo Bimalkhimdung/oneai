@@ -41,6 +41,19 @@ function safeTitle(prompt: string) {
   return words + (prompt.trim().split(/\s+/).length > 7 ? '...' : '');
 }
 
+function cleanModelMarkdown(content: string) {
+  return content
+    .split(/(```[\s\S]*?```)/g)
+    .map((part) => {
+      if (part.startsWith('```')) return part;
+      return part
+        .replace(/_{3,}/g, ' ')
+        .replace(/-{4,}/g, ' ')
+        .replace(/[ \t]{2,}/g, ' ');
+    })
+    .join('');
+}
+
 export default function ComparePage() {
   const { data: servers, isLoading } = useServers();
   const compare = useCompareModels();
@@ -349,7 +362,7 @@ export default function ComparePage() {
                       ) : (
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
-                          className="prose prose-neutral dark:prose-invert max-w-none text-sm"
+                          className="prose prose-neutral dark:prose-invert max-w-none break-words prose-pre:whitespace-pre-wrap prose-pre:break-words text-sm"
                           components={{
                             code: ({ children, className }) => (
                               <code className={cn('rounded bg-black/10 px-1 py-0.5 font-mono text-xs', className)}>
@@ -358,7 +371,7 @@ export default function ComparePage() {
                             ),
                           }}
                         >
-                          {result.content || '[No response]'}
+                          {cleanModelMarkdown(result.content || '[No response]')}
                         </ReactMarkdown>
                       )}
                       {(result.tokensOut || result.tokensIn) && (
@@ -383,8 +396,9 @@ export default function ComparePage() {
         </div>
 
         <form onSubmit={onSubmit} className="px-4 pt-3 pb-8 bg-background/95">
-          <div className="chat-composer-glow max-w-4xl mx-auto relative rounded-[28px] p-[1px] overflow-hidden shadow-sm transition-all duration-300">
-            <div className="relative z-10 flex items-center rounded-[28px] bg-card px-3 py-3">
+          <div className="max-w-4xl mx-auto relative group">
+            <div className="chat-composer-glow absolute inset-0 rounded-[28px] overflow-hidden shadow-sm pointer-events-none transition-all duration-300" />
+            <div className="relative z-10 flex flex-col gap-2 rounded-[28px] bg-card px-3 py-3 m-[1px] border border-transparent">
               <Input
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}

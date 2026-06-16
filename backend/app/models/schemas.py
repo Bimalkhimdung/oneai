@@ -202,3 +202,73 @@ class McpTestResultDto(BaseModel):
     resourceCount: int = 0
     tools: List[str] = Field(default_factory=list)
     error: Optional[str] = None
+
+class AgentProfileInput(BaseModel):
+    name: str = Field(..., min_length=1, max_length=60)
+    role: str = Field(..., min_length=1, max_length=2000)
+    model: str = Field(..., min_length=1, max_length=120)
+    system_prompt: Optional[str] = Field(None, max_length=4000)
+
+class AgentRunRequest(BaseModel):
+    prompt: str
+    session_id: Optional[str] = None
+    team_id: Optional[str] = None
+    agents: Optional[List[AgentProfileInput]] = None
+    model: Optional[str] = None
+    system_prompt: Optional[str] = None
+    mode: str = "single"
+
+class ChatAgentRunRequest(BaseModel):
+    prompt: str = Field(..., min_length=1, max_length=16000)
+
+class AgentProfileDto(BaseModel):
+    id: str
+    name: str
+    role: str
+    model: str
+    systemPrompt: Optional[str] = None
+    sortOrder: int
+
+class AgentTeamDto(BaseModel):
+    id: str
+    name: str
+    profiles: List[AgentProfileDto] = Field(default_factory=list)
+    createdAt: str
+    updatedAt: str
+
+class CreateAgentTeamInput(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    profiles: List[AgentProfileInput] = Field(..., min_length=1, max_length=8)
+
+class UpdateAgentTeamInput(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=120)
+    profiles: Optional[List[AgentProfileInput]] = None
+
+class AgentSessionDto(BaseModel):
+    id: str
+    userId: str
+    title: Optional[str] = None
+    status: str
+    createdAt: str
+    updatedAt: str
+
+class ToolDefinition(BaseModel):
+    name: str
+    description: str
+    parameters: dict
+
+class MemoryQuery(BaseModel):
+    query: str
+    top_k: int = 5
+
+class AgentMessageDto(BaseModel):
+    id: str
+    sessionId: str
+    role: str
+    content: str
+    eventType: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    createdAt: str
+
+class AgentSessionDetailDto(AgentSessionDto):
+    messages: List[AgentMessageDto] = Field(default_factory=list)
