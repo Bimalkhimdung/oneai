@@ -104,6 +104,15 @@ async def _run_single_agent(
                     messages.append({"role": "tool", "tool_name": name, "content": result})
                 else:
                     messages.append({"role": "user", "content": f"Tool '{name}' result:\n{result}"})
+            # Explicitly ask the model to now use the tool results to answer
+            messages.append({
+                "role": "user",
+                "content": (
+                    "Using ONLY the tool results provided above, answer the original question accurately. "
+                    "Do NOT use your training data or prior knowledge for factual details — rely exclusively "
+                    "on the tool output. If the results are insufficient, say so."
+                ),
+            })
             continue
 
         if content:

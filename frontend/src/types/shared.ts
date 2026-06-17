@@ -202,6 +202,7 @@ export interface AgentRunRequest {
   model?: string;
   system_prompt?: string;
   mode?: 'single' | 'multi';
+  max_iterations?: number;
 }
 
 export interface AgentProfileInput {

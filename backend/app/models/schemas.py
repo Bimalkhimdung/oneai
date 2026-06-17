@@ -217,6 +217,7 @@ class AgentRunRequest(BaseModel):
     model: Optional[str] = None
     system_prompt: Optional[str] = None
     mode: str = "single"
+    max_iterations: Optional[int] = Field(None, ge=1, le=20)
 
 class ChatAgentRunRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=16000)

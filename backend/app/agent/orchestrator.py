@@ -39,12 +39,14 @@ class AgentOrchestrator:
         session: AgentSession,
         model: str,
         system_prompt: str | None,
+        max_iterations: int = MAX_ITERATIONS,
     ):
         self.db = db
         self.user_id = user_id
         self.session = session
         self.model = model
         self.system_prompt = system_prompt or session.system_prompt or DEFAULT_SYSTEM
+        self.max_iterations = max_iterations
 
     async def _persist_message(
         self,
@@ -111,7 +113,7 @@ class AgentOrchestrator:
             self.session.updated_at = datetime.datetime.utcnow()
             await self.db.commit()
 
-        for iteration in range(MAX_ITERATIONS):
+        for iteration in range(self.max_iterations):
             yield _sse("thought", {"content": f"Iteration {iteration + 1}..."})
 
             try:
@@ -156,6 +158,15 @@ class AgentOrchestrator:
                             "role": "user",
                             "content": f"Tool '{name}' result:\n{result}",
                         })
+                # Explicitly ask the model to now use the tool results to answer
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "Using ONLY the tool results provided above, answer the original question accurately. "
+                        "Do NOT use your training data or prior knowledge for factual details — rely exclusively "
+                        "on the tool output. If the results are insufficient, say so."
+                    ),
+                })
                 await self.db.commit()
                 continue
 

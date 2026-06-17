@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app import dependencies
-from app.agent.multi_orchestrator import AgentProfileConfig, MultiAgentOrchestrator
-from app.agent.orchestrator import AgentOrchestrator
+from app.agent.multi_orchestrator import AgentProfileConfig, MultiAgentOrchestrator, MAX_ROUNDS
+from app.agent.orchestrator import AgentOrchestrator, MAX_ITERATIONS
 from app.models import database, schemas, AgentSession, AgentMessage, AgentTeam, AgentProfile
 
 logger = logging.getLogger("app.agent.routes")
@@ -268,6 +268,7 @@ async def run_agent(
                     user_id=current_user["id"],
                     session=session,
                     profiles=profiles,
+                    max_rounds=body.max_iterations or MAX_ROUNDS,
                 )
                 async for chunk in orchestrator.run(body.prompt):
                     yield chunk
@@ -278,6 +279,7 @@ async def run_agent(
                     session=session,
                     model=body.model or "",
                     system_prompt=body.system_prompt,
+                    max_iterations=body.max_iterations or MAX_ITERATIONS,
                 )
                 async for chunk in orchestrator.run(body.prompt):
                     yield chunk

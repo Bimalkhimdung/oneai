@@ -61,11 +61,13 @@ class MultiAgentOrchestrator:
         user_id: str,
         session: AgentSession,
         profiles: list[AgentProfileConfig],
+        max_rounds: int = MAX_ROUNDS,
     ):
         self.db = db
         self.user_id = user_id
         self.session = session
         self.profiles = profiles
+        self.max_rounds = max_rounds
 
     async def _persist(
         self,
@@ -131,7 +133,7 @@ class MultiAgentOrchestrator:
 
         last_agent: str | None = None
 
-        for round_num in range(MAX_ROUNDS):
+        for round_num in range(self.max_rounds):
             transcript_text = "\n".join(transcript) if transcript else "(no messages yet)"
             supervisor_input = (
                 f"User task:\n{prompt}\n\n"
