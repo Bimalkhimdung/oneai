@@ -234,6 +234,26 @@ export interface CreateAgentTeamInput {
   profiles: AgentProfileInput[];
 }
 
+export interface SingleAgentSettingsDto {
+  model: string;
+  systemPrompt: string;
+  maxIterations: number;
+}
+
+export interface MultiAgentSettingsDto {
+  defaultModel: string;
+  supervisorPrompt: string;
+  maxRounds: number;
+  teamName: string;
+  agents: AgentProfileInput[];
+  teamId?: string | null;
+}
+
+export interface AgentSettingsDto {
+  single: SingleAgentSettingsDto;
+  multi: MultiAgentSettingsDto;
+}
+
 export interface AgentSessionDto {
   id: string;
   userId: string;

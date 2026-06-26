@@ -1,4 +1,5 @@
 import datetime
+import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -10,11 +11,47 @@ from sqlalchemy.orm import selectinload
 from app import dependencies
 from app.agent.multi_orchestrator import AgentProfileConfig, MultiAgentOrchestrator, MAX_ROUNDS
 from app.agent.orchestrator import AgentOrchestrator, MAX_ITERATIONS
-from app.models import database, schemas, AgentSession, AgentMessage, AgentTeam, AgentProfile
+from app.models import database, schemas, AgentSession, AgentMessage, AgentTeam, AgentProfile, UserSettings
 
 logger = logging.getLogger("app.agent.routes")
 
 router = APIRouter(prefix="/agent")
+
+DEFAULT_SINGLE_SETTINGS = {
+    "model": "",
+    "systemPrompt": "",
+    "maxIterations": 10,
+}
+
+DEFAULT_MULTI_SETTINGS = {
+    "defaultModel": "",
+    "supervisorPrompt": "",
+    "maxRounds": 12,
+    "teamName": "My Team",
+    "agents": [],
+    "teamId": None,
+}
+
+
+def _agent_settings_from_preferences(preferences: dict | None) -> schemas.AgentSettingsDto:
+    agent = (preferences or {}).get("agent", {})
+    return schemas.AgentSettingsDto(
+        single={**DEFAULT_SINGLE_SETTINGS, **(agent.get("single") or {})},
+        multi={**DEFAULT_MULTI_SETTINGS, **(agent.get("multi") or {})},
+    )
+
+
+async def _get_or_create_user_settings(db: AsyncSession, user_id: str) -> UserSettings:
+    settings = (await db.execute(
+        select(UserSettings).where(UserSettings.user_id == user_id)
+    )).scalar_one_or_none()
+    if settings:
+        return settings
+
+    settings = UserSettings(user_id=user_id, preferences={})
+    db.add(settings)
+    await db.flush()
+    return settings
 
 
 def _session_dto(s: AgentSession) -> schemas.AgentSessionDto:
@@ -59,6 +96,50 @@ def _team_dto(t: AgentTeam) -> schemas.AgentTeamDto:
         createdAt=t.created_at.isoformat() + "Z",
         updatedAt=t.updated_at.isoformat() + "Z",
     )
+
+
+def _capture_agent_response(chunk: str, current_response: str) -> str:
+    if "event: response" not in chunk:
+        return current_response
+
+    for line in chunk.splitlines():
+        if not line.startswith("data:"):
+            continue
+        try:
+            payload = json.loads(line.removeprefix("data:").strip())
+        except json.JSONDecodeError:
+            continue
+        content = payload.get("content")
+        if isinstance(content, str):
+            return content
+
+    return current_response
+
+
+@router.get("/settings", response_model=schemas.AgentSettingsDto)
+async def get_agent_settings(
+    current_user: dict = Depends(dependencies.require_auth),
+    db: AsyncSession = Depends(database.get_db),
+):
+    settings = (await db.execute(
+        select(UserSettings).where(UserSettings.user_id == current_user["id"])
+    )).scalar_one_or_none()
+    return _agent_settings_from_preferences(settings.preferences if settings else None)
+
+
+@router.patch("/settings", response_model=schemas.AgentSettingsDto)
+async def update_agent_settings(
+    body: schemas.AgentSettingsDto,
+    current_user: dict = Depends(dependencies.require_auth),
+    db: AsyncSession = Depends(database.get_db),
+):
+    settings = await _get_or_create_user_settings(db, current_user["id"])
+    preferences = dict(settings.preferences or {})
+    preferences["agent"] = body.model_dump()
+    settings.preferences = preferences
+    await db.commit()
+    await db.refresh(settings)
+    return _agent_settings_from_preferences(settings.preferences)
 
 
 def _profiles_from_input(items: list[schemas.AgentProfileInput]) -> list[AgentProfileConfig]:
@@ -260,7 +341,18 @@ async def run_agent(
         session.team_id = body.team_id
         await db.commit()
 
+    mode = "multi" if use_multi else "single"
+    model_label = ", ".join(p.model for p in profiles) if profiles else (body.model or "")
+    logger.info(
+        "Agent query | mode=%s | session=%s | model=%s | query=%s",
+        mode,
+        session.id,
+        model_label,
+        body.prompt,
+    )
+
     async def event_stream():
+        final_response = ""
         try:
             if use_multi and profiles:
                 orchestrator = MultiAgentOrchestrator(
@@ -271,6 +363,7 @@ async def run_agent(
                     max_rounds=body.max_iterations or MAX_ROUNDS,
                 )
                 async for chunk in orchestrator.run(body.prompt):
+                    final_response = _capture_agent_response(chunk, final_response)
                     yield chunk
             else:
                 orchestrator = AgentOrchestrator(
@@ -282,10 +375,17 @@ async def run_agent(
                     max_iterations=body.max_iterations or MAX_ITERATIONS,
                 )
                 async for chunk in orchestrator.run(body.prompt):
+                    final_response = _capture_agent_response(chunk, final_response)
                     yield chunk
+            logger.info(
+                "Agent response | mode=%s | session=%s | model=%s | response=%s",
+                mode,
+                session.id,
+                model_label,
+                final_response,
+            )
         except Exception as e:
             logger.error(f"Agent run failed: {e}", exc_info=True)
-            import json
             yield f"event: error\ndata: {json.dumps({'content': str(e)})}\n\n"
             yield f"event: done\ndata: {{}}\n\n"
 

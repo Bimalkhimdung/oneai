@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.ollama_conn import resolve_ollama_server, ollama_base_url
 from app.models import AgentMessage, AgentSession
+from app.services.search import search_web
 
 logger = logging.getLogger("app.agent.multi")
 
@@ -52,6 +53,11 @@ def _parse_supervisor_json(text: str, agent_names: list[str]) -> dict:
         if name.lower() in text.lower():
             return {"agent": name, "reason": text}
     return {"agent": "FINISH", "reason": "Could not parse supervisor decision."}
+
+
+def _is_research_agent(profile: AgentProfileConfig) -> bool:
+    text = f"{profile.name} {profile.role}".lower()
+    return any(term in text for term in ("research", "search", "web", "fact", "gather"))
 
 
 class MultiAgentOrchestrator:
@@ -120,6 +126,8 @@ class MultiAgentOrchestrator:
 
         transcript: list[str] = []
         agent_names = [p.name for p in self.profiles]
+        research_profile = next((p for p in self.profiles if _is_research_agent(p)), None)
+        web_context = ""
 
         await self._persist("user", prompt, "user")
         await self.db.commit()
@@ -130,6 +138,23 @@ class MultiAgentOrchestrator:
             await self.db.commit()
 
         yield _sse("thought", {"content": f"Starting multi-agent team ({len(self.profiles)} agents)..."})
+
+        if research_profile:
+            yield _sse("handoff", {"from": None, "to": research_profile.name, "reason": "Researcher gathers current web evidence before the team answers."})
+            yield _sse("tool_call", {"name": "web_search", "arguments": {"query": prompt}})
+            web_context = await search_web(prompt)
+            if web_context:
+                yield _sse("tool_result", {"name": "web_search", "result": web_context})
+                transcript.append(f"[{research_profile.name} web_search]:\n{web_context}")
+                await self._persist(
+                    "tool",
+                    web_context,
+                    "tool_result",
+                    {"name": "web_search", "agent": research_profile.name, "query": prompt},
+                )
+                await self.db.commit()
+            else:
+                yield _sse("tool_result", {"name": "web_search", "result": "No web results found."})
 
         last_agent: str | None = None
 
@@ -162,7 +187,11 @@ class MultiAgentOrchestrator:
                 if len(transcript) > 1:
                     try:
                         synth = await supervisor.ainvoke([
-                            SystemMessage(content="Synthesize a clear final answer for the user."),
+                            SystemMessage(content=(
+                                "Synthesize a clear final answer for the user. "
+                                "For current factual questions, prioritize web_search evidence in the discussion. "
+                                "Do not invent facts that are not supported by the research evidence."
+                            )),
                             HumanMessage(content=f"Task: {prompt}\n\nDiscussion:\n{transcript_text}"),
                         ])
                         final = str(synth.content)
@@ -190,6 +219,7 @@ class MultiAgentOrchestrator:
             agent_system = (
                 f"You are {profile.name}. Your role: {profile.role}\n"
                 "Respond to the user task. Be concise. You are collaborating with other agents.\n"
+                "If web_search evidence is present in the team discussion, treat it as fresher than model memory.\n"
                 f"{profile.system_prompt or ''}"
             ).strip()
 

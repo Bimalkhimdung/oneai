@@ -94,5 +94,11 @@ async def upload_document(
         )
     
     # 2. Process, chunk, embed, and store
-    await process_and_store_document(db, id, file)
+    try:
+        await process_and_store_document(db, id, file)
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to process document embeddings: {str(e)}"
+        )
     return {"message": "Document processed and stored successfully."}

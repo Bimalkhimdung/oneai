@@ -222,6 +222,29 @@ class AgentRunRequest(BaseModel):
 class ChatAgentRunRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=16000)
 
+class SingleAgentSettingsDto(BaseModel):
+    model: str = ""
+    systemPrompt: str = ""
+    maxIterations: int = Field(default=10, ge=1, le=20)
+
+class AgentProfileSettingsDto(BaseModel):
+    name: str
+    role: str
+    model: str
+    system_prompt: Optional[str] = None
+
+class MultiAgentSettingsDto(BaseModel):
+    defaultModel: str = ""
+    supervisorPrompt: str = ""
+    maxRounds: int = Field(default=12, ge=1, le=20)
+    teamName: str = "My Team"
+    agents: List[AgentProfileSettingsDto] = Field(default_factory=list)
+    teamId: Optional[str] = None
+
+class AgentSettingsDto(BaseModel):
+    single: SingleAgentSettingsDto = Field(default_factory=SingleAgentSettingsDto)
+    multi: MultiAgentSettingsDto = Field(default_factory=MultiAgentSettingsDto)
+
 class AgentProfileDto(BaseModel):
     id: str
     name: str

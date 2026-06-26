@@ -1,7 +1,9 @@
 import io
 from typing import List
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
+from sqlalchemy.orm import selectinload
 import fitz  # PyMuPDF
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from fastapi import UploadFile
@@ -12,6 +14,7 @@ from app.providers.base import ProviderConnectInfo
 from app.services.server import decrypt_api_key
 
 EMBEDDING_MODEL = "nomic-embed-text"
+logger = logging.getLogger("app.services.rag")
 
 async def extract_text_from_upload(upload: UploadFile) -> str:
     content = await upload.read()
@@ -35,12 +38,54 @@ def chunk_text(text: str) -> List[str]:
         chunk_overlap=200,
         separators=["\n\n", "\n", " ", ""]
     )
+    print("Splited text from the uploaded file {filename}",splitter.split_text(text))
     return splitter.split_text(text)
 
+def _is_embedding_model(model_name: str) -> bool:
+    return model_name == EMBEDDING_MODEL or model_name.startswith(EMBEDDING_MODEL + ":")
+
+async def _resolve_embedding_target(
+    db: AsyncSession,
+    user_id: str,
+    preferred_server_id: str | None = None,
+) -> tuple[Server, str] | None:
+    from app.models import Server
+
+    stmt = (
+        select(Server)
+        .where(Server.user_id == user_id)
+        .options(selectinload(Server.models))
+    )
+    servers = list((await db.execute(stmt)).scalars().all())
+    if preferred_server_id:
+        servers.sort(key=lambda server: 0 if server.id == preferred_server_id else 1)
+
+    for server in servers:
+        adapter = get_adapter(server.provider.value)
+        conn_info = ProviderConnectInfo(
+            host=server.host,
+            port=server.port,
+            apiKey=decrypt_api_key(server)
+        )
+        try:
+            ping = await adapter.ping(conn_info)
+            if not ping.ok:
+                logger.info("Skipping embedding server %s because ping failed: %s", server.name, ping.error)
+                continue
+            models = await adapter.list_models(conn_info)
+        except Exception:
+            logger.info("Skipping embedding server %s because it is unreachable", server.name)
+            continue
+        for model in models:
+            if _is_embedding_model(model.name):
+                return server, model.name
+
+    return None
+
 async def check_embedding_model_installed(db: AsyncSession, chat_id: str, user_id: str) -> bool:
-    """Verifies that the default embedding model is installed on the chat's server."""
-    from app.models import Chat, Model, Server
-    stmt = select(Chat).where(Chat.id == chat_id)
+    """Verifies that the default embedding model is installed on any user server."""
+    from app.models import Chat, Model
+    stmt = select(Chat).where(Chat.id == chat_id, Chat.user_id == user_id)
     chat = (await db.execute(stmt)).scalar_one_or_none()
     if not chat or not chat.model_id:
         return False
@@ -50,27 +95,11 @@ async def check_embedding_model_installed(db: AsyncSession, chat_id: str, user_i
     if not model:
         return False
 
-    stmt = select(Server).where(Server.id == model.server_id)
-    server = (await db.execute(stmt)).scalar_one_or_none()
-    if not server:
-        return False
-
-    adapter = get_adapter(server.provider.value)
-    conn_info = ProviderConnectInfo(
-        host=server.host,
-        port=server.port,
-        apiKey=decrypt_api_key(server)
-    )
-    
-    try:
-        models = await adapter.list_models(conn_info)
-        return any(m.name == EMBEDDING_MODEL or m.name.startswith(EMBEDDING_MODEL + ":") for m in models)
-    except Exception:
-        return False
+    return await _resolve_embedding_target(db, user_id, model.server_id) is not None
 
 async def generate_embedding(db: AsyncSession, chat_id: str, text_content: str) -> List[float]:
-    """Generates an embedding vector using the chat's selected server."""
-    from app.models import Chat, Model, Server
+    """Generates an embedding vector using a user server that has the embedding model."""
+    from app.models import Chat, Model
     stmt = select(Chat).where(Chat.id == chat_id)
     chat = (await db.execute(stmt)).scalar_one_or_none()
     if not chat or not chat.model_id:
@@ -81,10 +110,10 @@ async def generate_embedding(db: AsyncSession, chat_id: str, text_content: str) 
     if not model:
         raise Exception("Model not found")
 
-    stmt = select(Server).where(Server.id == model.server_id)
-    server = (await db.execute(stmt)).scalar_one_or_none()
-    if not server:
-        raise Exception("Server not found")
+    target = await _resolve_embedding_target(db, chat.user_id, model.server_id)
+    if not target:
+        raise Exception(f"Embedding model '{EMBEDDING_MODEL}' not installed.")
+    server, embedding_model = target
 
     adapter = get_adapter(server.provider.value)
     conn_info = ProviderConnectInfo(
@@ -93,7 +122,7 @@ async def generate_embedding(db: AsyncSession, chat_id: str, text_content: str) 
         apiKey=decrypt_api_key(server)
     )
     
-    return await adapter.embed(conn_info, EMBEDDING_MODEL, text_content)
+    return await adapter.embed(conn_info, embedding_model, text_content)
 
 async def process_and_store_document(db: AsyncSession, chat_id: str, upload: UploadFile) -> Document:
     # Extract text

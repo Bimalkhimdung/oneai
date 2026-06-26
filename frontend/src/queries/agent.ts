@@ -1,8 +1,9 @@
 'use client';
 
-import { getAccessToken } from '@/lib/api';
+import { api, getAccessToken } from '@/lib/api';
 import type {
   AgentRunRequest,
+  AgentSettingsDto,
   AgentSessionDetailDto,
   AgentSessionDto,
   AgentStreamEvent,
@@ -21,6 +22,17 @@ export async function fetchAgentTools(): Promise<ToolDefinition[]> {
   });
   if (!res.ok) throw new Error('Failed to load tools');
   return res.json();
+}
+
+export async function fetchAgentSettings(): Promise<AgentSettingsDto> {
+  return api<AgentSettingsDto>('/agent/settings');
+}
+
+export async function saveAgentSettings(input: AgentSettingsDto): Promise<AgentSettingsDto> {
+  return api<AgentSettingsDto>('/agent/settings', {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
 }
 
 export async function fetchAgentSessions(): Promise<AgentSessionDto[]> {

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useServers } from '@/queries/servers';
-import { runAgentStream, fetchAgentSessions, deleteAgentSession, fetchAgentTeams, createAgentTeam } from '@/queries/agent';
+import { runAgentStream, fetchAgentSessions, deleteAgentSession, fetchAgentTeams, createAgentTeam, fetchAgentSettings, saveAgentSettings } from '@/queries/agent';
 import type { AgentProfileInput, AgentSessionDto, AgentStreamEvent, AgentTeamDto } from '@/types/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,7 +31,7 @@ function cleanMarkdown(c: string) {
   ).join('');
 }
 
-interface MultiSettings { defaultModel: string; supervisorPrompt: string; maxRounds: number; teamName: string; agents: AgentProfileInput[]; teamId?: string; }
+interface MultiSettings { defaultModel: string; supervisorPrompt: string; maxRounds: number; teamName: string; agents: AgentProfileInput[]; teamId?: string | null; }
 const DEFAULTS: MultiSettings = { defaultModel: '', supervisorPrompt: '', maxRounds: 12, teamName: 'My Team', agents: DEFAULT_AGENTS };
 const STORAGE_KEY = 'oneai:multi-agent-settings';
 
@@ -48,6 +48,19 @@ function saveSettings(s: MultiSettings) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch {}
 }
 
+function normalizeSettings(settings: Partial<MultiSettings>): MultiSettings {
+  return {
+    ...DEFAULTS,
+    ...settings,
+    agents: settings.agents && settings.agents.length > 0
+      ? settings.agents.map((agent) => ({
+          ...agent,
+          system_prompt: agent.system_prompt ?? undefined,
+        }))
+      : DEFAULTS.agents,
+  };
+}
+
 export default function MultiAgentPage() {
   const { data: servers } = useServers();
   const [sessions, setSessions] = useState<AgentSessionDto[]>([]);
@@ -59,6 +72,7 @@ export default function MultiAgentPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [cfg, setCfg] = useState<MultiSettings>(() => loadSettings());
   const [draft_cfg, setDraftCfg] = useState<MultiSettings>(() => loadSettings());
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -66,20 +80,48 @@ export default function MultiAgentPage() {
 
   // Only auto-select model if nothing saved yet
   useEffect(() => {
+    if (!settingsLoaded) return;
     if (cfg.defaultModel || !models.length) return;
     const first = models[0]!;
     setCfg((s) => ({ ...s, defaultModel: first, agents: s.agents.map((a) => (a.model ? a : { ...a, model: first })) }));
     setDraftCfg((s) => ({ ...s, defaultModel: first, agents: s.agents.map((a) => (a.model ? a : { ...a, model: first })) }));
-  }, [models, cfg.defaultModel]);
+  }, [models, cfg.defaultModel, settingsLoaded]);
 
-  useEffect(() => { fetchAgentSessions().then(setSessions).catch(() => {}); fetchAgentTeams().then(setTeams).catch(() => {}); }, []);
+  useEffect(() => {
+    fetchAgentSessions().then(setSessions).catch(() => {});
+    fetchAgentTeams().then(setTeams).catch(() => {});
+    fetchAgentSettings()
+      .then((saved) => {
+        const next = normalizeSettings(saved.multi);
+        setCfg(next);
+        setDraftCfg(next);
+        saveSettings(next);
+      })
+      .catch(() => {})
+      .finally(() => setSettingsLoaded(true));
+  }, []);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [turns]);
 
   function openSettings() { setDraftCfg(cfg); setSettingsOpen(true); }
-  function applySettings() {
+  async function applySettings() {
     if (!draft_cfg.defaultModel) { toast.error('Please select a default model'); return; }
     saveSettings(draft_cfg);
-    setCfg(draft_cfg); setSettingsOpen(false); toast.success('Settings applied');
+    setCfg(draft_cfg);
+    try {
+      const current = await fetchAgentSettings().catch(() => null);
+      await saveAgentSettings({
+        single: current?.single ?? {
+          model: '',
+          systemPrompt: '',
+          maxIterations: 10,
+        },
+        multi: draft_cfg,
+      });
+    } catch {
+      toast.error('Saved locally, but failed to sync settings');
+      return;
+    }
+    setSettingsOpen(false); toast.success('Settings applied');
   }
 
   function updateDraftAgent(idx: number, patch: Partial<AgentProfileInput>) {
@@ -100,7 +142,7 @@ export default function MultiAgentPage() {
   function loadTeam(team: AgentTeamDto) {
     setDraftCfg((s) => ({
       ...s, teamId: team.id, teamName: team.name,
-      agents: team.profiles.map((p) => ({ name: p.name, role: p.role, model: p.model, system_prompt: p.systemPrompt })),
+      agents: team.profiles.map((p) => ({ name: p.name, role: p.role, model: p.model, system_prompt: p.systemPrompt ?? undefined })),
     }));
   }
 
@@ -134,7 +176,7 @@ export default function MultiAgentPage() {
 
     try {
       await runAgentStream(
-        { prompt, mode: 'multi', session_id: sessionId, team_id: cfg.teamId,
+        { prompt, mode: 'multi', session_id: sessionId, team_id: cfg.teamId ?? undefined,
           agents: cfg.teamId ? undefined : validAgents,
           system_prompt: cfg.supervisorPrompt || undefined, max_iterations: cfg.maxRounds },
         handleEvent, abortRef.current.signal,

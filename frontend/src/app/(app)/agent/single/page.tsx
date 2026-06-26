@@ -9,6 +9,8 @@ import {
   fetchAgentSessions,
   deleteAgentSession,
   fetchAgentTools,
+  fetchAgentSettings,
+  saveAgentSettings,
 } from '@/queries/agent';
 import type { AgentSessionDto, AgentStreamEvent, ToolDefinition } from '@/types/shared';
 import { Button } from '@/components/ui/button';
@@ -75,6 +77,7 @@ export default function SingleAgentPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<AgentSettings>(() => loadSettings());
   const [draftSettings, setDraftSettings] = useState<AgentSettings>(() => loadSettings());
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -85,15 +88,25 @@ export default function SingleAgentPage() {
 
   // Only auto-select if no model has been saved yet
   useEffect(() => {
+    if (!settingsLoaded) return;
     if (settings.model || models.length === 0) return;
     const first = models[0]!;
     setSettings((s) => ({ ...s, model: first }));
     setDraftSettings((s) => ({ ...s, model: first }));
-  }, [models, settings.model]);
+  }, [models, settings.model, settingsLoaded]);
 
   useEffect(() => {
     fetchAgentSessions().then(setSessions).catch(() => {});
     fetchAgentTools().then(setTools).catch(() => {});
+    fetchAgentSettings()
+      .then((saved) => {
+        const next = { ...DEFAULT_SETTINGS, ...saved.single };
+        setSettings(next);
+        setDraftSettings(next);
+        saveSettings(next);
+      })
+      .catch(() => {})
+      .finally(() => setSettingsLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -101,10 +114,28 @@ export default function SingleAgentPage() {
   }, [turns]);
 
   function openSettings() { setDraftSettings(settings); setSettingsOpen(true); }
-  function applySettings() {
+  async function applySettings() {
     if (!draftSettings.model) { toast.error('Please select a model'); return; }
     saveSettings(draftSettings);
-    setSettings(draftSettings); setSettingsOpen(false); toast.success('Settings applied');
+    setSettings(draftSettings);
+    try {
+      const current = await fetchAgentSettings().catch(() => null);
+      await saveAgentSettings({
+        single: draftSettings,
+        multi: current?.multi ?? {
+          defaultModel: '',
+          supervisorPrompt: '',
+          maxRounds: 12,
+          teamName: 'My Team',
+          agents: [],
+          teamId: null,
+        },
+      });
+    } catch {
+      toast.error('Saved locally, but failed to sync settings');
+      return;
+    }
+    setSettingsOpen(false); toast.success('Settings applied');
   }
 
   async function onSubmit(e: React.FormEvent) {
