@@ -1,6 +1,6 @@
 :root {
   /* Odysseus default theme — exact app tokens */
-  --bg: #282c34;
+  --bg: #111111;
   --bg2: #1e2228;          /* app code/hl background */
   --panel: #111;           /* app panel surface */
   --panel2: #1e2228;
@@ -20,16 +20,14 @@
 
 html { 
   scroll-behavior: smooth; 
-  scroll-snap-type: y proximity; 
   scroll-padding-top: 60px; 
 }
 
 body {
   margin: 0;
-  background:
-    radial-gradient(1100px 520px at 82% -10%, rgba(224,108,117,0.12), transparent 60%),
-    radial-gradient(900px 520px at 0% 0%, rgba(53,90,102,0.30), transparent 55%),
-    var(--bg);
+  background-color: var(--bg);
+  background-image: radial-gradient(circle, rgba(156,222,242,0.06) 1px, transparent 1.4px);
+  background-size: 24px 24px;
   color: var(--fg);
   font-family: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   line-height: 1.6;
@@ -41,23 +39,34 @@ a { color: var(--accent); text-decoration: none; }
 /* Each section is a full-viewport "page" with its content centered, so only
    one shows at a time and the snap is obvious. */
 .hero, section {
-  scroll-snap-align: start; 
   min-height: 100vh;
   display: flex; 
   flex-direction: column; 
   justify-content: center;
   padding: 60px 22px;
+  position: relative;
+  border-top: 1px solid rgba(156,222,242,0.16);
+  border-bottom: 1px solid rgba(0,0,0,0.45);
 }
 
-/* Alternate the page backgrounds: slate (the body) ↔ black, to make each
-   page boundary obvious. */
-/* Subtle dot-grid texture across the whole page. */
-section:nth-of-type(odd), .hero {
-  background-color: #111111;
-  background-image: radial-gradient(circle, rgba(156,222,242,0.075) 1px, transparent 1.4px);
-  background-size: 24px 24px;
+.hero {
+  border-top: 0;
 }
-section:nth-of-type(even) {
+
+.hero::after,
+section::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(156,222,242,0.45), transparent);
+  pointer-events: none;
+}
+
+/* Keep the page surface consistent instead of alternating section blocks. */
+main {
   background-color: var(--bg);
   background-image: radial-gradient(circle, rgba(156,222,242,0.06) 1px, transparent 1.4px);
   background-size: 24px 24px;
@@ -87,8 +96,8 @@ section:nth-of-type(even) {
   display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 17px; letter-spacing: 0.2px; color: var(--heading); 
 }
 .brand img {
-  width: 24px;
-  height: 24px;
+  width: 36px;
+  height: 36px;
   filter: brightness(0) saturate(100%) invert(88%) sepia(21%) saturate(543%) hue-rotate(172deg) brightness(98%) contrast(98%);
 }
 
@@ -234,21 +243,68 @@ code {
 }
 
 /* Footer */
+.page-shell {
+  min-height: calc(100vh - 170px);
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 120px 22px 64px;
+}
+.page-card {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.page-card h1 {
+  margin: 0 0 18px;
+  font-size: clamp(32px, 6vw, 64px);
+  line-height: 0.95;
+}
+.page-card p:last-child {
+  max-width: 760px;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.7;
+}
 .site-footer {
   padding: 32px 22px;
-  text-align: center;
   color: var(--muted);
   font-size: 14px;
   border-top: 1px solid var(--border);
   background: var(--panel);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  max-width: 1080px;
-  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: start;
   width: 100%;
 }
+.site-footer > div,
+.site-footer nav {
+  max-width: 1080px;
+}
+.site-footer strong {
+  display: block;
+  color: var(--fg);
+  margin-bottom: 4px;
+}
+.site-footer span {
+  display: block;
+}
+.site-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 18px;
+}
 .site-footer a:hover { color: var(--fg); }
+
+@media (max-width: 760px) {
+  .site-footer {
+    grid-template-columns: 1fr;
+  }
+  .site-footer nav {
+    justify-content: flex-start;
+  }
+}
 
 /* Preview Grid (Terminal/Status) */
 .hero-panel {
